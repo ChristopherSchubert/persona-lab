@@ -131,6 +131,64 @@ authority sits*; mode says *how it's invoked right now*. Any rank can run in eit
   worktree); a platform persona runs from home base, reaching into member repos as a reader; a
   summoned persona joins whatever session the human is driving.
 
+## Agent lifecycle & orchestration
+
+Invocation mode sets not just *how* a persona starts but its **lifecycle and default
+autonomy**.
+
+### Lifecycle by mode
+
+**Dispatched — "act, then report" (autonomy ON, self-orienting):**
+1. **Orient** — stateless, so rebuild context from the durable layer: read the queue slice;
+   check the world (git state, is the writer lock free, what changed since last run, manifest
+   scope).
+2. **Select** — pick the next unit per remit (Developer: top issue, bugs first; auditor: its
+   sweep). **No work → sleep immediately**; never spin or invent work.
+3. **Act + verify** — do it, self-verify (verification hierarchy / E2E gate), close with proof.
+4. **Report & yield** — file findings (report-by-exception + dedup), update status, release the
+   lock, sleep. Blocked above authority → escalate via issue, don't wait.
+   - Re-entrant: waking twice must not double-do (check-before-act + dedup).
+
+**Summoned — "ask, then act only if told" (autonomy OFF):**
+1. **Engage the human first** — load briefing + state, surface what it sees, ask what's wanted.
+   It does not run off and work.
+2. **Advise** within its lens.
+3. **Act only on explicit request** — then either work step-wise under the human's eye or hand
+   off to a dispatched run. Never self-initiates mutation.
+4. **Hand back** — durable outputs become issues.
+
+### Orchestration: loop the pipeline, not the personas
+
+A fixed round-robin (Developer → Maven → …) makes every cross-persona handoff cost up to a full
+lap. Instead, **the queue is the scheduler**: personas are dispatched by queue state and
+cadence, in a pipeline ordered by dependency — **Sense → Triage → Act → Audit**, repeating:
+
+1. **Sense** — auditors run (parallel fan-out, bounded + read-only) → findings to the queue.
+2. **Triage** — the **PM** grooms: dedup, frame, prioritize, escalate owner-class to
+   `/decisions`. The queue is now ordered and actionable.
+3. **Act** — the **Developer runs a continuous inner loop**, draining the actionable queue
+   (bugs first) under the writer lock until empty or budget-spent.
+4. **Audit** — the PM acceptance-audits the closed work.
+
+This dissolves handoff latency: a finding lands in the queue, the PM triages it, the Developer's
+*next pull* takes it — latency is "queue + one PM groom," not "one full round-robin." Nothing
+runs in lockstep.
+
+**Mechanism vs judgment** — keep them apart:
+- **Mechanism (when to wake whom)** = dumb infrastructure: per-persona cadence (manifest),
+  scheduled sweeps (cron), event hooks (PR merged → Security Analyst). No judgment here.
+- **Judgment (priority, what's owner-class)** = the **PM**, the conductor — itself dispatched,
+  not a long-running daemon.
+- **Pacemaker = the human** — summon anyone anytime (orthogonal to the pipeline), decide at the
+  funnel, kick a cycle at will.
+
+**Triggering is a per-persona mix.** Each persona's manifest cadence picks its trigger from a
+small vocabulary — **summon-only · on-demand · scheduled · event** (event named) — so behavior
+is assembled per persona, not fixed globally. E.g. Developer = on-demand + event(issue labeled
+ready); Leak Scanner = scheduled(daily) + event(pre-commit); Architect = summon-only; PM =
+scheduled(after sweeps) + on-demand. (Orchestration mechanism is built in Phase 4; this is the
+model it implements.)
+
 ## The portfolio manifest
 
 The team is declared, not ambient. One file (lives in the platform repo; trivial/absent for
@@ -371,7 +429,8 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
 4. Bus: GitHub issues as the queue?
 5. Roster: which disciplines are in scope (default minimal: Product Analyst + Developer; add
    architect/auditors only when chosen)?
-6. Per persona: cadence (summon-only / dispatched-on-demand / scheduled) + access lock.
+6. Per persona: trigger mix (summon-only / on-demand / scheduled / event — event named) +
+   access lock.
 7. Tooling: worktrees on? auto mode for unattended Developer? claim a port range?
 
 ## Appendix B — primary sources informing the upgrades
