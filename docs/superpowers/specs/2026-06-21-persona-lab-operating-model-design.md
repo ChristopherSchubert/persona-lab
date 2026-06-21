@@ -74,6 +74,24 @@ platform-only. Inventing a junior just for symmetry is the costume-role anti-pat
 | Cost | **Cost Watch** (account-level billing) | (local resource-growth check) | platform-leaning |
 | Leak scan | (policy under Security) | **Leak Scanner** (scans this repo) | repo-leaning |
 
+### Responsibility split by rank
+
+The rank delta is a real division of labor, not just seniority. **Platform rank owns and
+evolves the standard, the canonical cross-app artifact, cross-app decisions, and the
+human-escalation funnel. Repo rank applies that standard within one codebase, does the local
+execution and audits, and escalates anything that would change the standard.** Bright line:
+a repo rank may act *within* the standard; only the platform rank may *change* it.
+
+| Discipline | Platform rank owns | Repo rank owns | Escalates up when |
+|---|---|---|---|
+| Product | portfolio roadmap; cross-app sequencing; the human funnel | local queue hygiene; acceptance + drift audits; sequencing within the agreed slice | it reorders the portfolio, or it's an owner-class call |
+| Security | the security policy; the registrar account; risk-acceptance framing; incident command | the local security review against policy; repo deps/secrets/auth checks; filing findings | risk acceptance is needed, or the policy must change |
+| Design | the design system (tokens, components, patterns); cross-app coherence | local conformance to the system; flagging drift; applying it locally | a new or changed pattern is needed |
+
+Because the split is clean, **single-repo collapse is clean**: the repo rank keeps its
+responsibilities, and the human absorbs the platform rank's (no portfolio means no roadmap to
+sequence, but the human still sets direction and accepts risk).
+
 ### Avoiding overkill — by construction
 
 1. **Personas are invoked, not staffed.** An uninstantiated persona costs nothing; cost
