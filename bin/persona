@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Launch an interactive Claude Code session wearing a persona.
+#
+#   bin/persona pm                 # groom/audit as the PM
+#   bin/persona platform-architect # design contracts/ADRs
+#   bin/persona writer             # implement (see worktree note below)
+#
+# How it works: the persona briefing in docs/personas/<name>.md is appended to the
+# session's system prompt, so *this* session knows which hat it's wearing. CLAUDE.md
+# can't do that — every session in a repo reads the same CLAUDE.md — so identity has
+# to be session-scoped, which is exactly what --append-system-prompt gives us.
+#
+# Durable state lives in files + issues, not the conversation, so each launch reloads
+# fresh. No persistent "standing" session is needed.
+
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+name="${1:?usage: bin/persona <persona-name>  (see docs/personas/)}"
+brief="$here/docs/personas/$name.md"
+
+[[ -f "$brief" ]] || { echo "no briefing at $brief" >&2; exit 1; }
+
+# The owner is you, the human — not a session to launch.
+[[ "$name" == "owner" ]] && { echo "owner is you, not a session. read $brief"; exit 1; }
+
+# The writer edits app code, so it should run in an isolated git worktree against the
+# real repo — not here. This lab only scaffolds the model; wire that up when it's real.
+if [[ "$name" == "writer" ]]; then
+  echo "note: the writer edits app code — launch it inside a worktree of the target repo," >&2
+  echo "      not persona-lab. This script just shows the briefing-injection pattern." >&2
+fi
+
+exec claude --append-system-prompt "You are the **$name** persona for this project.
+Operate strictly within the briefing below. Hand off via issues; escalate per the routing in
+docs/personas/owner.md (PM funnel, not direct-to-owner except the incident path).
+
+$(cat "$brief")"
