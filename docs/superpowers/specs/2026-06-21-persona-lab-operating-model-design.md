@@ -254,6 +254,45 @@ Developer · dispatched · 2026-06-21 · briefing ↗
 - **The human's own decisions get the inverse:** no robot banner, marked plainly as the
   human voice (`DECISION — human`), kept scarce so it carries weight.
 
+### Substrate, governance & the cockpit
+
+**Decision:** the bus is **GitHub Issues** as the store, behind a **queue port** (file /
+comment / label / close / query) so the substrate is swappable without touching the model. A
+**GitHub Projects v2 board is the cross-repo cockpit from day one**, curated by the platform
+PM (the board is the PM's roadmap made visible). Evaluated against Linear (4/5) and a
+Supabase/Postgres queue (4/5); Issues (4/5) won on cost (free), native git/PR co-location,
+best off-the-shelf agent tooling (official MCP + `gh`), and audit semantics — and its two
+weaknesses (no upsert; a ~500 content-writes/hour secondary cap) are exactly what the
+governance below neutralizes. Supabase becomes the right answer only if idempotent dedup +
+cross-repo analytics become core and owning a control plane is acceptable — cheap to switch
+to later, via the port.
+
+**Volume governance — this is what keeps the bus from becoming a nightmare:**
+
+- **Report by exception.** A scheduled scan that finds nothing files nothing — it bumps a
+  single rolling status, never a new issue per run. Only a *new* finding opens an issue.
+- **Dedup at creation.** A persona fingerprints a finding and checks for an existing open
+  issue (local fingerprint index or label query) *before* filing — a match is a no-op or a
+  single bump. Issues has no upsert, so this is mandatory, not optional.
+- **Batch the minor.** Many small findings → one checklist issue; below a severity floor,
+  findings roll into a periodic digest rather than individual issues.
+- **Scheduled queue-grooming is a first-class PM duty** — regular dedup / merge / close-stale
+  / compact, so the queue self-maintains.
+- **Write-rate discipline.** Serial writes spaced ≥1s, honoring rate-limit headers; report-by-
+  exception keeps the fleet well under the 500/hour content-creation ceiling.
+
+**The cockpit, curated by the PM:**
+
+- **Automation routes items, not a persona.** Projects v2 auto-add workflows pull
+  correctly-labeled issues from each repo onto the board and map labels/issue-type → board
+  fields. The PM curates only the *judgment* fields (priority, owner-class flag, dup
+  resolution), never membership.
+- **The board is a view over issues, not a second store** — no double-bookkeeping; issues
+  remain the source of truth.
+- **The human consumes the `/decisions` slice** (the `needs-human` items the PM framed) and
+  never curates the board.
+- **Single-repo:** the repo Product Analyst curates; roadmap judgment collapses to the human.
+
 ## Provenance
 
 - **Now:** the comment envelope + signed trailers under the human's single GitHub identity.
@@ -309,10 +348,12 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
 ## Build phases (dependency-ordered, each independently usable)
 
 1. **Model-as-plugin, single-repo grain.** Plugin skeleton + persona agents with access
-   locks + `_disciplines` + voice specs + `/persona` launcher with worktrees + the bus
-   discipline/envelope + the four upgrades baked into briefings. Validate by hand-writing
-   the manifest for one real repo (e.g. `finances`). **Outcome: usable personas in a real
-   repo immediately.**
+   locks + `_disciplines` + voice/tone specs + `/persona` launcher with worktrees + the bus
+   discipline/envelope + the four upgrades baked into briefings. The **queue port over GitHub
+   Issues** (with the dedup-at-creation fingerprint ledger + report-by-exception), a
+   **PM-curated Projects v2 cockpit from day one**, and the **`/decisions`** command. Validate
+   by hand-writing the manifest for one real repo (e.g. `finances`). **Outcome: usable
+   personas in a real repo immediately.**
 2. **The bootstrap (`/persona-init`).** The interview that generates the single-repo config.
    *Outcome: "installable, asks questions, then goes."*
 3. **Platform tier.** Portfolio manifest, senior ranks + cross-app artifacts, cross-repo
@@ -348,6 +389,10 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
 - Exact `_disciplines` injection mechanism (shared-read vs. concatenation into each agent).
 - Whether briefings are read from the plugin + manifest scope, or copied/customized into
   the repo (lean: plugin canonical + manifest override).
-- Cross-repo issue-bus mechanics and platform-tier execution home (Phase 3).
+- Platform-tier execution home — where platform personas run and reach into member repos
+  (Phase 3). (Bus substrate is decided: GitHub Issues store + Projects v2 cockpit, behind a
+  queue port.)
+- The dedup fingerprint-ledger implementation (in-repo index vs. label-encoded vs. a tiny
+  state file) — Phase 1 detail.
 - Scheduling + notification channel for the 9am cockpit scan (Phase 4).
 - Manifest file format (YAML vs. Markdown table vs. JSON).
