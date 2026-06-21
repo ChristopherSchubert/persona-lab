@@ -103,6 +103,34 @@ sequence, but the human still sets direction and accepts risk).
 4. **The bootstrap interview decides the grain at install**, so a single-repo project never
    sees the platform machinery.
 
+## Engagement × rank — two orthogonal axes
+
+Rank (platform vs repo) and engagement mode (summoned vs dispatched) are **independent axes**
+and a common source of confusion. Rank says *what a persona is responsible for and where its
+authority sits*; mode says *how it's invoked right now*. Any rank can run in either mode.
+
+- **Summon is human-initiated and interactive.** The human pulls a persona — of any rank —
+  into the live session to advise. It answers; it doesn't act.
+- **Dispatch is autonomous.** A persona — of any rank — runs to do its work; results land as
+  commits and issues. It **cannot summon anyone**: if it hits something above its authority it
+  escalates *via an issue*, never mid-run dialogue. Personas coordinate only through the bus —
+  that is what keeps them stateless.
+
+| | Summoned (advises the human, live) | Dispatched (autonomous) |
+|---|---|---|
+| **Platform / senior** | Architect: "does this break a contract?"; PM frames a decision | portfolio policy audit; roadmap groom across repos |
+| **Repo / junior** | "Developer, how would you approach this?" | Developer implements an issue; Leak Scanner sweeps; Product Analyst grooms the local queue |
+
+- **Natural gravity, not a rule:** seniors tend to be summoned (cross-app judgment wants the
+  human in the loop), juniors tend to be dispatched (local legwork doesn't) — but both modes
+  stay open to every persona, because the human-in-the-loop guarantee must hold either way.
+- **The two modes are the two escalation latencies of one contract:** summoned → advises
+  in-session → the human decides synchronously; dispatched → can't reach a live human →
+  escalates via `BLOCKED`/`needs-human` → the PM funnels → it surfaces in `/decisions`.
+- **Tier decides where a dispatched run executes:** a repo persona runs against its repo (a
+  worktree); a platform persona runs from home base, reaching into member repos as a reader; a
+  summoned persona joins whatever session the human is driving.
+
 ## The portfolio manifest
 
 The team is declared, not ambient. One file (lives in the platform repo; trivial/absent for
