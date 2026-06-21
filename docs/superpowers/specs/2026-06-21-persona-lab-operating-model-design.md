@@ -58,14 +58,19 @@ Senior rank = the strategist who owns the standard (*Maven / Manager / Architect
 rank = the operator who applies it (*Analyst*). A paired discipline is **one briefing + a
 rank delta**, not two documents — the delta *is* the decides-vs-escalates line.
 
+**A junior rank exists only when there's repo-local work no other persona covers.**
+Architecture and ontology have none — local design is the Developer's and planner's, and
+ontology conformance is a drift audit the Product Analyst already runs — so both are
+platform-only. Inventing a junior just for symmetry is the costume-role anti-pattern.
+
 | Discipline | Platform rank | Repo rank | Shape |
 |---|---|---|---|
 | Product | **Product Manager** (portfolio roadmap, human funnel) | **Product Analyst** (local queue, acceptance/drift audits) | paired |
 | Security | **Security Maven** (policy, registrar, incident cmd) | **Security Analyst** (local review, files up) | paired |
-| Architecture | **Platform Architect** (cross-app contracts, ADRs) | (often folded into Developer/planner) | paired, light repo rank |
+| Architecture | **Platform Architect** (cross-app contracts, ADRs) | none — Developer + planner cover local design; escalate contract/ADR changes up | platform-only |
 | Design | **Design Maven** (the design system) | **Design Analyst** (local conformance) | paired |
 | Build | — (no platform twin) | **Developer / writer** | repo-only |
-| Ontology | **Data-model Librarian** (the one shared ontology) | (repo consumes + reports drift) | platform-only |
+| Ontology | **Data-model Librarian** (the one shared ontology) | none — Product Analyst drift-audits local conformance | platform-only |
 | Cost | **Cost Watch** (account-level billing) | (local resource-growth check) | platform-leaning |
 | Leak scan | (policy under Security) | **Leak Scanner** (scans this repo) | repo-leaning |
 
