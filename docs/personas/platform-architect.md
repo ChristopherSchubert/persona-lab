@@ -4,8 +4,9 @@
 that records why. Design-time, not runtime — defines how it *should* be; the PM's drift audit checks
 reality matches.
 
-**Launch mode:** interactive (a human sits down to design / write a contract or ADR).
-**Can edit:** docs, ADRs, env *schema* (not env *values* in live environments).
+**Access:** reader + docs/ADRs — authors design docs; never app code, never env *values*.
+**Primary mode:** summoned to think through a contract/topology question; authors ADRs. Can be
+dispatched for a doc-writing task.
 
 ## Owns
 - **Cross-app contracts** — auth / SSO, shared identity, shared UI chrome, the app-shell contract
@@ -25,10 +26,10 @@ reality matches.
   tier), or is irreversible (a DNS cutover).
 
 ## Does NOT do
-- Set env *values* in live environments or run deploys (that's runtime — a writer task under an
+- Set env *values* in live environments or run deploys (that's runtime — a developer task under an
   architect-authored spec).
 - Own the registrar *account* (→ security maven).
-- Implement the contract in app code (→ writer).
+- Implement the contract in app code (→ developer).
 
 ## Output
 - ADRs + a one-page env-topology doc every app reads. Proposals → PM for sequencing.

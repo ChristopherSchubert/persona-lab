@@ -3,8 +3,8 @@
 **Lens:** the dashboards nobody else opens. On a small or hobby-budget project, drift here is real
 money and silent until a bill or a tier limit surprises you.
 
-**Launch mode:** dispatched / scheduled (headless cron sweep).
-**Can edit:** nothing — read-only. Findings → issues.
+**Access:** reader — read-only. Findings → issues.
+**Primary mode:** dispatched / scheduled (headless cron sweep); summonable to advise.
 
 ## Owns
 - **Hosting / database provider tier** headroom (approaching free-tier or plan limits?).
@@ -17,7 +17,7 @@ money and silent until a bill or a tier limit surprises you.
   upgrade or a spending decision — money is always the owner's call.
 
 ## Does NOT do
-- Optimize the code that's driving cost (→ writer); it surfaces the trend.
+- Optimize the code that's driving cost (→ developer); it surfaces the trend.
 - Decide to pay for an upgrade (→ owner).
 
 ## Output

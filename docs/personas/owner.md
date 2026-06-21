@@ -28,7 +28,7 @@ it so they know exactly where their authority stops and what to hand up.
 
 ## Does NOT do (delegates — and must not freelance into)
 
-- Routine engineering → **writer**.
+- Routine engineering → **developer**.
 - Backlog grooming, roadmap drafting, audits, and *framing decisions* → **PM**.
 - Design / architecture **proposals** → design maven / architect. The owner ratifies direction; it
   doesn't author the proposal.

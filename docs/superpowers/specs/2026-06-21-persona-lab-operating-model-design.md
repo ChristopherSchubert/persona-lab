@@ -1,13 +1,13 @@
 # persona-lab as an installable operating model — design
 
 **Date:** 2026-06-21
-**Status:** design, awaiting owner review
+**Status:** design, awaiting human review
 **Branch:** `design/operating-model`
 
 ## What this is
 
 persona-lab becomes a **Claude Code plugin**: an installable, self-configuring operating
-model for running software projects with **one human (the owner) driving an interactive
+model for running software projects with **one human (the human) driving an interactive
 Claude Code session** and AI personas doing the legwork. You install the plugin, run a
 bootstrap interview that asks how you want to operate, and it generates the per-project
 config and goes live.
@@ -21,8 +21,8 @@ without bloating the model. It is informed by a research pass over 2025–2026 p
 
 ## Core concepts (unchanged from the existing model)
 
-- **Owner = product authority, a human, present in an interactive session.** Not an AI.
-  Holds money / direction / irreversible-or-outward-facing calls.
+- **The human = product authority.** The single person driving the interactive session —
+  never an AI. Holds money / direction / irreversible-or-outward-facing calls.
 - **Personas are stateless subagents.** No persistent conversation context; durable state
   lives in files and issues, so any persona reloads when it starts.
 - **Issues are the bus.** Open = live queue, closed = audit trail. Personas never talk to
@@ -30,7 +30,7 @@ without bloating the model. It is informed by a research pass over 2025–2026 p
 - **Access is a lock, not a trait.** The Developer holds the *writer* lock and is the sole
   code-mutator; everyone else is a reader. Enforced structurally (see Plugin architecture —
   agents-as-access-locks).
-- **Escalation is built in.** A persona that hits an owner-class call hands up via the PM
+- **Escalation is built in.** A persona that hits a human-only call hands up via the PM
   funnel; it never silently defaults the riskier side.
 
 ## The grain: a latent two-tier model
@@ -48,7 +48,7 @@ friction. Resolution:
   platform counterpart via issues*.
 
 **The tier boundary is the existing escalation contract, recursed one level.** repo-rank →
-platform-rank has the same shape as platform-rank → owner: the junior decides what is
+platform-rank has the same shape as platform-rank → human: the junior decides what is
 local-and-within-standard and escalates anything that would change the shared artifact.
 
 ### Graduated ranks
@@ -60,7 +60,7 @@ rank delta**, not two documents — the delta *is* the decides-vs-escalates line
 
 | Discipline | Platform rank | Repo rank | Shape |
 |---|---|---|---|
-| Product | **Product Manager** (portfolio roadmap, owner funnel) | **Product Analyst** (local queue, acceptance/drift audits) | paired |
+| Product | **Product Manager** (portfolio roadmap, human funnel) | **Product Analyst** (local queue, acceptance/drift audits) | paired |
 | Security | **Security Maven** (policy, registrar, incident cmd) | **Security Analyst** (local review, files up) | paired |
 | Architecture | **Platform Architect** (cross-app contracts, ADRs) | (often folded into Developer/planner) | paired, light repo rank |
 | Design | **Design Maven** (the design system) | **Design Analyst** (local conformance) | paired |
@@ -74,7 +74,7 @@ rank delta**, not two documents — the delta *is* the decides-vs-escalates line
 1. **Personas are invoked, not staffed.** An uninstantiated persona costs nothing; cost
    comes from invocation, not from existing on a chart.
 2. **A single repo runs the repo tier only** — platform responsibilities collapse upward
-   into the owner. With one app, *you are* the platform tier.
+   into the human. With one app, *you are* the platform tier.
 3. **The platform tier is promoted into existence by the first real cross-app concern** (a
    second app, a shared noun, a shared design token, a second domain) — never before.
 4. **The bootstrap interview decides the grain at install**, so a single-repo project never
@@ -117,8 +117,11 @@ engagement:
    non-parallelizable. Default: **serialize on the queue.** Fan out only for bounded,
    independent, read-mostly, high-value subtasks (the auditor sweep is the canonical fit).
    Budget before fanning out.
-4. **Concision.** Comments and writes say what is necessary and stop — no preamble, no
-   recap, no filler. Every token earns its place, same bar as the code.
+4. **Concision = necessary completeness, not minimal words.** A comment carries everything
+   the reader needs and nothing they don't — the test is the *reader*, not the word count.
+   Someone with no prior context must understand *what* happened, *where*, *why it matters*,
+   and *what comes next*. Cut filler — preamble, recaps, hedging — never substance. A finding
+   so terse it's cryptic has failed just as badly as a wall of restated context.
 
 ## Per-persona voice
 
@@ -127,18 +130,26 @@ Each persona writes like a real person doing that job — distinct diction and f
 envelope *names* the persona; the voice *confirms* it. Each briefing carries a one-line
 voice spec (2–3 traits + register). Examples (same finding, all tight):
 
-- **Developer** (precise, code-first): `FINDING: token check fails on clock skew >30s — no leeway in verify(). Fix + test in 4c1a2.`
-- **Security Maven** (blunt, risk-first): `FINDING: 30s skew gap lets expired tokens through. Low severity — widen leeway, pin with a test.`
-- **PM** (sequencing, calm): `FINDING folded into #41 — same root cause as #38. Fix together before the release cut.`
+- **Developer** (precise, code-first): "Login 401s valid credentials when the client clock
+  runs >30s fast — `verifyToken()` in `auth/session.ts` rejects any JWT with a future `iat`,
+  zero skew tolerance. Repro: clock +45s → 401. Fixing with a 60s `clockTolerance` plus a
+  regression test; low risk."
+- **Security Maven** (blunt, risk-first): "Zero clock-skew tolerance in token verification
+  locks out users whose device clock runs fast (>30s). Correctness/availability bug, not a
+  breach — a 60s window is safe and standard. Pin it with a test so the tolerance can't
+  quietly grow later."
+- **PM** (sequencing, calm): "Same root cause as #38 (the intermittent login failures) —
+  clock-skew intolerance in token verification. Folding both into #41; recommend fixing
+  together before the release cut. Developer has a low-risk fix ready."
 
 ## The issue bus discipline
 
 - **Comments are typed, discrete state records — not conversation.** Vocabulary:
-  `FINDING` · `PROPOSAL` · `DECISION` · `HANDOFF` · `PROOF` · `BLOCKED(needs-owner)`. One
+  `FINDING` · `PROPOSAL` · `DECISION` · `HANDOFF` · `PROOF` · `BLOCKED(needs-human)`. One
   self-contained record of a state transition per comment.
 - **Personas do not converse in-thread.** No persona-to-persona dialogue (they already
-  never talk directly). A persona posts a finding → PM frames → owner decides. Dialogue is
-  owner↔PM only and terminates in a recorded decision.
+  never talk directly). A persona posts a finding → PM frames → human decides. Dialogue is
+  human↔PM only and terminates in a recorded decision.
 - **The PM compacts noisy threads** — context-hygiene applied to the durable layer.
 - **An issue's body is the contract; its comments are a short, signed, typed ledger.**
 
@@ -147,9 +158,17 @@ voice spec (2–3 traits + register). Examples (same finding, all tight):
 ```markdown
 🤖 **Developer** · FINDING
 
-token check fails on clock skew >30s — no leeway in verify(). Fix + regression test in 4c1a2.
+Login rejects valid credentials when the user's device clock runs >30s ahead of the server.
 
-<details><summary>AI persona — not the owner</summary>
+`verifyToken()` in `auth/session.ts` treats any JWT whose `iat` is in the future as forged
+and returns 401 — it allows zero clock skew. Users on slightly-fast clocks hit "session
+expired" on a correct password. Repro: set the system clock +45s, sign in → 401.
+
+Proposed fix: a 60s `clockTolerance` in `verifyToken()` (RFC-7519 standard), pinned by a
+regression test. Low blast radius. Implementing under this issue unless the architect flags
+a contract concern.
+
+<details><summary>AI persona — not the human</summary>
 Developer · dispatched · 2026-06-21 · briefing ↗
 </details>
 ```
@@ -158,31 +177,31 @@ Developer · dispatched · 2026-06-21 · briefing ↗
 - **Body:** the concise record.
 - **Footer (collapsed `<details>`):** provenance — mode, date, briefing link — present but
   uncluttering. Briefing link resolves to the canonical plugin file; manifest may override.
-- **The owner's own decisions get the inverse:** no robot banner, marked plainly as the
-  human voice (`DECISION — owner`), kept scarce so it carries weight.
+- **The human's own decisions get the inverse:** no robot banner, marked plainly as the
+  human voice (`DECISION — human`), kept scarce so it carries weight.
 
 ## Provenance
 
-- **Now:** the comment envelope + signed trailers under the owner's single GitHub identity.
-  The AI always writes to the bus as a persona; the owner's identity is reserved for genuine
-  human decisions (which the AI may record on the owner's behalf, attributed as
-  `DECISION — owner, recorded by PM`).
+- **Now:** the comment envelope + signed trailers under the human's single GitHub identity.
+  The AI always writes to the bus as a persona; the human's identity is reserved for genuine
+  human decisions (which the AI may record on the human's behalf, attributed as
+  `DECISION — human, recorded by PM`).
 - **Phase 4:** a single **GitHub App bot** ("persona-system") authors AI writes — clean
-  owner/AI separation, secure short-lived installation tokens for unattended `claude -p`
+  human/AI separation, secure short-lived installation tokens for unattended `claude -p`
   dispatch, one-time setup. Per-persona machine accounts remain a later option if avatars
   are ever wanted (almost certainly not worth the admin).
 
-## The owner cockpit — surfacing what's waiting
+## The human's cockpit — surfacing what's waiting
 
-The owner drives interactively; the system makes the PM funnel visible without hunting:
+The human drives interactively; the system makes the PM funnel visible without hunting:
 
-- **`/owner` command (always available):** aggregates every `needs-owner` item (Phase 1:
+- **`/decisions` command (always available):** aggregates every `needs-human` item (Phase 1:
   this repo; Phase 3: portfolio + platform queue), renders them **PM-framed** (crisp options
-  + recommendation, highest-leverage first), lets the owner decide in-session, and records
+  + recommendation, highest-leverage first), lets the human decide in-session, and records
   the decision durably. The raw queue stays one command away — curation never becomes
   concealment.
-- **Opt-in session-start line:** a one-liner "N decisions waiting — run `/owner`".
-- **Optional scheduled ~9am scan (Phase 4):** runs the cockpit scan and notifies the owner
+- **Opt-in session-start line:** a one-liner "N decisions waiting — run `/decisions`".
+- **Optional scheduled ~9am scan (Phase 4):** runs the cockpit scan and notifies the human
   (channel TBD — push / iMessage / email).
 
 ## Plugin architecture
@@ -194,7 +213,7 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
 | `agents/` | One agent per persona. **Briefing = system prompt; access lock = `tools:` whitelist.** Readers have no `Edit`/`Write`; Developer has full tools. This makes the access lock structural. |
 | `commands/persona-init.md` | The **bootstrap** — runs the interview, writes the instance config. |
 | `commands/persona.md` | Summon/dispatch launcher (replaces `bin/persona`); uses `claude --worktree` for the Developer. |
-| `commands/owner.md` | The owner cockpit. |
+| `commands/decisions.md` | The human's cockpit — surfaces what's waiting on the human. |
 | `skills/` + `_disciplines` | The shared disciplines, injected into every persona; the bootstrap skill; later a promote-to-platform skill. |
 
 - **Model vs. instance:** the model (briefings, disciplines, agents) lives in the plugin so
@@ -223,7 +242,7 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
 2. **The bootstrap (`/persona-init`).** The interview that generates the single-repo config.
    *Outcome: "installable, asks questions, then goes."*
 3. **Platform tier.** Portfolio manifest, senior ranks + cross-app artifacts, cross-repo
-   issue bus, home-base execution, the promotion flow, `/owner` portfolio aggregation.
+   issue bus, home-base execution, the promotion flow, `/decisions` portfolio aggregation.
 4. **Autonomous dispatch & scheduling.** `claude -p`, auto mode, Stop-hook gating, the
    GitHub App bot, scheduled ~9am cockpit scan + notification, fan-out economics enforced.
 
@@ -233,7 +252,7 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
 
 1. Grain: single repo, or platform spanning multiple apps?
 2. (if platform) which repos are members, and where is home base?
-3. Owner: who is the escalation target?
+3. Human: who is the escalation target?
 4. Bus: GitHub issues as the queue?
 5. Roster: which disciplines are in scope (default minimal: Product Analyst + Developer; add
    architect/auditors only when chosen)?

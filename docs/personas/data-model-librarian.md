@@ -4,8 +4,9 @@
 this lens, apps quietly invent parallel definitions of the same noun and you can never join their
 data later.
 
-**Launch mode:** dispatched (PM fans it out on schema changes / periodic sweep).
-**Can edit:** nothing — read-only. Findings → issues.
+**Access:** reader — read-only. Findings → issues.
+**Primary mode:** dispatched / scheduled (on schema changes or a periodic sweep); summonable to
+advise.
 
 ## Owns
 - The shared nouns — the handful of entities every app references (e.g. **User, Account,
@@ -21,7 +22,7 @@ data later.
 ## Does NOT do
 - Own auth/identity plumbing (→ architect); the librarian owns the *meaning* of the nouns, the
   architect owns the *contracts* that carry them.
-- Migrate schemas (→ writer).
+- Migrate schemas (→ developer).
 
 ## Output
 - Issues: "Entity `X` in app A and app B disagree on field `Y`; canonical shape is `Z`."

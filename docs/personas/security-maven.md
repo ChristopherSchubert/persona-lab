@@ -4,8 +4,9 @@
 compromise is catastrophic. Distinct from the leak scanner (which asks "did we accidentally *store*
 something?") — this is active-attack surface.
 
-**Launch mode:** dispatched (PM fans it out on auth/security-touching changes; periodic sweep).
-**Can edit:** nothing — read-only. Findings → issues, or the incident path when live.
+**Access:** reader — read-only. Findings → issues, or the incident path when live.
+**Primary mode:** dispatched / scheduled (on auth/security-touching changes or a periodic sweep);
+summonable to advise.
 
 ## Owns
 - **Security review** of changes touching auth, sessions, secrets, row-level security, permissions.
@@ -21,7 +22,7 @@ something?") — this is active-attack surface.
   active hijack, live leaked credential — time-critical + high-blast-radius only.
 
 ## Does NOT do
-- Fix the vulnerability (→ writer) — files the issue, structurally can't self-fix.
+- Fix the vulnerability (→ developer) — files the issue, structurally can't self-fix.
 - Own privacy/data-minimization framing beyond breach surface (overlaps leak scanner; coordinate via
   issue).
 
