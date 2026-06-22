@@ -167,7 +167,10 @@ cost_tokens}`. No-ops and declines are recorded *with reasons*. Every bus write 
 **Dispatched — "act, then report" (autonomy ON, self-orienting):**
 1. **Orient** — stateless, so rebuild context from the durable layer: read the queue slice;
    check the world (git state, is the writer lock free, what changed since last run, manifest
-   scope).
+   scope). **Tier the orient to the trigger** — an `event:*` wake reads only its triggering artifact
+   (the diff, the finding), not a full sweep + manifest + run-log skim; full orient is opt-in by stage.
+   Orient tokens are budgeted (statelessness means every wake pays a rebuild, so cost scales with wakes
+   not work — keep it minimal); the optional run-log voice-skim stays off unless it earns its cost.
 2. **Select** — pick the next unit per remit (Developer: top issue, bugs first; auditor: its
    sweep). **No work → sleep immediately**; never spin or invent work.
 3. **Act + verify** — do it, self-verify (verification hierarchy / E2E gate), close with proof.
@@ -253,8 +256,9 @@ The tag is a light stub; deep planning happens when the action is actually pulle
 
 **Resolution is async and re-queues.** A blocked action is **parked**, not run. When its blocker
 clears — the human decides, a dependency completes, a coordination partner acts, a clarification
-returns — it flips to `ready` and the next Act pass takes it (polled each Triage, or
-event-triggered).
+returns — it flips to `ready` and the next Act pass takes it. **Re-entry is event-triggered** (the
+blocker's resolution wakes it), not re-polled every Triage; polling is the fallback only for blockers
+with no clean event signal, and backs off the longer an item sits.
 
 The dashboard reflects this with a **parked set** beside decisions-waiting: each blocked action,
 its blocker type, and where it sits in the funnel — so "why isn't this done yet?" is always
@@ -402,6 +406,11 @@ The "build the failure path first-class" layer; shares the watchdog/reaper with 
 - **Budget ceiling — per-day global cap, hard-pause + alert.** One daily token/$ ceiling across the
   fleet; dispatch checks it before each wake. At the limit, **new dispatch pauses**, in-flight work
   finishes, the human is alerted. A hard ceiling; raising it is a **human decision** (money).
+- **Per-cycle + per-wake budgets (not just per-day).** The daily cap is drained in tranches (e.g.
+  hourly) so one bad cycle can't burn the whole day; each Sense→Triage→Act→Audit cycle carries its own
+  token budget (the Act loop's "until budget-spent" *is* that number), and each wake a soft ceiling that
+  escalates rather than silently continuing. Count-based backstops don't bound a single expensive wake —
+  token budgets do.
 - **Runaway-loop backstops:** caps on wakes/cycle, retries/action (the breaker), agents/cycle (the
   fan-out cap).
 - **Attribution + ownership:** the run-log's `cost_tokens` feeds Head of FinOps + the dashboard; Cost
@@ -516,7 +525,15 @@ engagement:
 1. **Verification hierarchy.** A close or finding needs *a check the persona can run
    itself*. Robustness order: **deterministic rules** (tests, build exit, linter,
    schema/diff) **> visual/rendered** (screenshot, browser E2E) **> LLM-as-judge** (least
-   robust; weigh latency). "Looks done" is not done.
+   robust; weigh latency). "Looks done" is not done. Verification is a **manifest + an artifact,
+   not an attestation**: each repo declares a verification manifest `{typecheck, lint, test, e2e}`
+   of commands the Developer must run, and **E2E produces a file artifact** (screenshot/trace) the
+   close's `PROOF` comment must cite — no artifact, not done. For human **actions** that can't be
+   auto-verified (a secret the runner can't read back, a vendor-console toggle), the runbook carries a
+   **non-revealing verification command** the human runs and pastes the result of (`gh secret list |
+   grep NAME` = presence+timestamp, not value; a health-check returning 200); where even that's
+   impossible the item closes **`human-attested`**, logged as such — never claim verification you can't
+   perform.
 2. **Context hygiene.** Context is finite; attention degrades as the window fills. Levers:
    **compaction** (near-full window → summarize, reinitiate fresh) and **note-taking**
    (externalize durable state *as you go* to issues/ADRs). The window is scratch space;
