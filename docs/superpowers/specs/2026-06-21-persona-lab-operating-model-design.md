@@ -196,7 +196,8 @@ cadence, in a pipeline ordered by dependency — **Sense → Triage → Act → 
    `decision` items to `/decisions`.
 3. **Act** — the **Developer runs a continuous inner loop**, draining the **ready** queue (bugs
    first) under the writer lock until empty or budget-spent.
-4. **Audit** — the PM acceptance-audits the closed work.
+4. **Audit** — acceptance audit on close (event-driven, never blocking): routine/sampled to the repo
+   Analyst, money/correctness/UI to the PM.
 
 **Review is two lenses.** Before close, the **Lead Engineer** (reader, fresh context) independently
 reviews the Developer's PR for correctness and craft — separate from the PM's acceptance audit. Both
@@ -286,6 +287,31 @@ fixed table.** The platform PM stewards it:
 
 So human decisions do double duty: they unblock the parked action *and* teach the boundary — and the
 boundary only ever loosens by the human's explicit consent.
+
+### The platform PM is decomposed, not a monolith
+The PM accreted many duties (triage, the human funnel, audit, compaction, grooming, the charter,
+rollups, the verification gate) — making it a single-threaded bottleneck and a single point of failure.
+It is split three ways:
+
+- **Protected core (irreducibly PM, judgment-heavy, singular):** the human-escalation funnel (sole gate,
+  framing, the completeness + verification gates, decisions-vs-actions), delegation-charter stewardship,
+  portfolio roadmap/sequencing, and the acceptance-audit *judgment* for money/correctness/UI-critical
+  closes.
+- **Pushed down to the repo Product Analyst:** local queue grooming / dedup / prioritization, local
+  thread compaction, first-tier triage (resolve-what-it-can, escalate the rest up), and routine sampled
+  acceptance audits. The PM reconciles only the cross-repo remainder.
+- **Pushed out to deterministic readers / tooling (no LLM wake):** run-log rollup *aggregation* (`jq`
+  over NDJSON), dedup fingerprint matching (the ledger), queue metrics. The PM adds judgment/framing on
+  top only when surfacing — it does not read everything itself.
+
+**Resilience — the PM is not a SPOF:**
+- **Act keeps draining `ready` even if a PM triage/audit wake fails** — the queue persists; the watchdog
+  re-dispatches the PM.
+- **`/decisions` reads labeled queue state directly**, so a stalled PM never makes the human unreachable
+  — the framed-but-unsurfaced backlog is still visible (and the budget-pause alert names pending items).
+- **Audit is event-driven, not a blocking stage** — it fires on `event:issue.closed` (always for
+  money/correctness/UI, sampled otherwise), lock-free against HEAD, so it never waits behind a long Act
+  loop or gates the next cycle.
 
 ## Issue types & the Developer's mandate
 
