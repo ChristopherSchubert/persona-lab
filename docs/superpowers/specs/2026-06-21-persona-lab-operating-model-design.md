@@ -266,7 +266,9 @@ The tag is a light stub; deep planning happens when the action is actually pulle
 - Each tier resolves-what-it-can, escalates-the-rest, so the human sees the minimum. This is the
   escalation contract recursed onto blockers, run *in parallel* with Act.
 - **One owner per funnel position — no double-claim, no drop.** An item carries an explicit
-  funnel-position (`triage:repo → triage:platform → needs-human` / `ready` / `parked`); the transition
+  funnel-position **`owner`** ∈ {`triage:repo`, `triage:platform`} (a single dimension — on admission the
+  PM moves the item into the `needs-human` *lifecycle* and its *status* stays per the state machine; these
+  are not `owner` values); the transition
   *is* the handoff, and only the tier owning the current position may act on it. (This also makes the
   dashboard's "where it sits in the funnel" directly derivable, not inferred.)
 - **The recursion is enforced, not just behavioral.** The `triage:repo → triage:platform` handoff gets
@@ -392,28 +394,34 @@ badly). It governs the right to **integrate to the repo's main line — one writ
 - **Serialize at dispatch (primary).** The orchestrator never launches a second Developer for a repo
   that already has one. Controlled dispatch is the lock most of the time.
 - **Atomic claim via create-only CAS (backstop). No force, ever.** Claiming **creates** a lock marker
-  `refs/persona/lock/<repo>` → a tiny lock object `{holder, claimed_at}`; GitHub rejects a second
-  *create*, so exactly one writer wins — server-side atomic, no service. The **only two operations on
-  the ref are create and delete** — never a non-fast-forward update, never `--force`, never a history
-  rewrite. Release deletes the ref. The `refs/persona/*` namespace is **bot-write-only** (ref
-  protection), so nothing outside the system can create or remove it. This is the compare-and-set
-  Issues lacks (a read-then-write "record" would race).
-- **Liveness by progress, not wall-clock — and never auto-steal.** The marker carries **no
-  writer-supplied TTL** (a forgeable TTL was the hole). A claimant that finds the lock held checks the
-  holder's liveness via the **run-log** (an active run record still advancing through
-  commit-checkpoints). A *provably* dead holder (orphaned run record, no checkpoint progress past a
-  system-constant threshold) is recovered; **when liveness is ambiguous it escalates** ("lock held by a
-  possibly-stalled Developer — recover?") rather than stealing. No competitor ever overrides a live
-  holder. Works daemonless in Phase 1 (checked on demand when someone wants the lock); Phase 4 adds an
-  active progress-heartbeat + a reaper sweep for faster recovery.
+  as a **protectable branch** `persona-lock/<repo>` (a real `refs/heads/*` ref, so GitHub rulesets *can*
+  guard it — see below) pointing to a tiny lock object `{holder, claimed_at, fence}`. The API is
+  create-only: `POST git/refs` returns **422 "Reference already exists"** to the second racer, so exactly
+  one writer wins — server-side atomic, no service. The **only two operations are create and delete** —
+  never `PATCH`/update, never `--force`, never a history rewrite. Release deletes the ref. A ruleset on
+  `persona-lock/*` (restrict creation/deletion/update + non-fast-forward, bypass = the bot only) makes
+  this server-enforced — *correcting an earlier error: `refs/persona/*` custom namespaces can't be
+  protected; branches can.* This is the compare-and-set Issues lacks.
+- **Fencing token — the holder's belief is verified, not trusted.** The lock object carries a **fence**
+  (its creating-commit SHA / a monotonic counter). Before *every* integrate-to-main-line push, a writer
+  **re-reads the lock and asserts its fence still matches**; a writer whose fence no longer matches
+  **aborts and checkpoints** instead of pushing. This is what makes "never auto-steal" *safe* rather than
+  merely polite: even if liveness is misjudged and the lock is reclaimed under a still-running writer,
+  the stale writer can't corrupt main — its next push is fenced out.
+- **Liveness by progress + a claim-grace window — never a forgeable TTL.** The marker has **no
+  writer-supplied TTL**. The winner writes its **first checkpoint immediately after winning the create**
+  (before orient), bounding the alive-but-silent window. A claimant finding the lock held judges the
+  holder live if **checkpoint-progressing OR within a system-constant `grace` of `claimed_at`**; only a
+  holder past grace *and* showing no progress is "provably dead." Ambiguous → **escalate, never steal**.
+  Daemonless in Phase 1 (checked on demand); Phase 4 adds an active progress-heartbeat + reaper.
 - **Readers are lock-free.** Auditors read **committed state (HEAD)**, never the writer's in-progress
   worktree — so audits are consistent and run freely alongside a write.
-- **Stale recovery = delete-then-create, not force (shared with failure handling).** Once a holder is
-  confirmed dead (or the human approves recovery): assess the abandoned worktree, roll back to the last
-  clean checkpoint (commit-checkpoint pattern), file an interrupted-work issue, **delete** the stale
-  marker, then **create** a fresh one. Deleting a *marker* ref destroys no work (the work lives in the
-  worktree/feature branch) — it is not a force-push. Concurrent recoverers race only on the atomic
-  create; the loser re-orients.
+- **Stale recovery = delete-then-create, not force.** Once a holder is confirmed dead (or the human
+  approves): assess the abandoned worktree, roll back to the last clean checkpoint, file an
+  interrupted-work issue, **delete** the stale marker, then **create** a fresh one with a new fence.
+  Deleting a *marker* destroys no work (work lives in the worktree/feature branch) — not a force-push.
+  Concurrent recoverers race only on the atomic create; **the loser re-reads, sees it's not the holder,
+  and sleeps — it does not respin.**
 - **Human preempt — "take the wheel."** Default is the human directs the Developer. But the human may
   explicitly take the writer lock: dispatched Developers for that repo pause, the active one
   checkpoints and yields, the human edits, and the human's commits flow back as state the personas
@@ -545,8 +553,9 @@ content as data, guard the real boundaries; no theater.
   feed **render untrusted / `origin:external` content with a visible marker and inert** — never as
   actionable instructions; the human is the trust root, so reaching their eyes is the highest-value
   injection.
-- **Lower-risk, noted not over-built:** ref "squatting" needs push access external contributors don't
-  have (refs are bot-write-only regardless); cryptographic signing stays deferred (GitHub's
+- **Lower-risk, noted not over-built:** lock "squatting" needs push access external contributors don't
+  have (the lock branch `persona-lock/*` is ruleset-protected to the bot, and a fencing token defeats
+  any steal that slips through — see the writer lock); cryptographic signing stays deferred (GitHub's
   authenticated author + edit history suffice for this threat model).
 
 ## Cross-repo coordinated change
@@ -592,7 +601,7 @@ repos: [finances, schubert-family, livability-scout]
 engagement:
   product-manager:    { all: owns(roadmap+funnel) }
   platform-architect: { all: owns(contracts+ADRs), reads: all }
-  data-architect:     { all: owns(data-model), reads: all }
+  data-architect:     { all: owns(ontology), reads: all }
   head-of-design:     { all: owns(design-system) }
   head-of-security:   { all: owns(policy+registrar) }
   head-of-finops:     { all: owns(billing) }
@@ -938,8 +947,10 @@ resolved against **ground truth**, in order of robustness (the verification hier
   permissions?
 - **the official docs** — what's the actual capability/procedure?
 
-**Verification is bounded, not infinite.** This research step has its **own token budget**; if it can't
-conclude within budget, the item escalates **flagged `under-verified`** with what *was* checked — never
+**Verification is bounded, not infinite.** This research step has its own token budget **debited from the
+same `cycle_budget_remaining` ledger** (not a parallel pool — so the cycle cap stays the true ceiling);
+if it can't conclude within budget, the item escalates **flagged `under-verified`** with what *was*
+checked — never
 silently dropped, never researched forever. Escalate-with-partial-evidence beats burning the cycle, and
 the `under-verified` label is itself honest signal to the human.
 
@@ -1105,11 +1116,19 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
 - Anthropic — [How Anthropic teams use Claude Code (PDF)](https://www-cdn.anthropic.com/58284b19e702b49db9302d5b6f135ad8871e7658.pdf)
 - Claude Code docs — [worktrees](https://code.claude.com/docs/en/worktrees)
 
+## Resolved (Phase-1 decisions)
+
+- **`_disciplines` injection = bootstrap concatenation.** Claude Code agent definitions are static
+  system prompts with no runtime include, so the bootstrap concatenates `_disciplines` into each
+  generated agent (plugin file canonical; regenerate on model update). Not a runtime shared-read.
+- **The manifest→`tools:` whitelist assertion** lands as a bootstrap-generated check **+ a dispatch-time
+  guard** (deterministic, no LLM) — fail-closed on a content-hash mismatch each dispatch; full
+  re-derivation only when the manifest changes (per FinOps: don't re-derive a CODEOWNERS-gated static
+  file every wake).
+- Briefings are **plugin-canonical with manifest override** (not copied per repo).
+
 ## Open questions (deferred to phase planning)
 
-- Exact `_disciplines` injection mechanism (shared-read vs. concatenation into each agent).
-- Whether briefings are read from the plugin + manifest scope, or copied/customized into
-  the repo (lean: plugin canonical + manifest override).
 - Platform-tier execution home — where platform personas run and reach into member repos
   (Phase 3). (Bus substrate is decided: GitHub Issues store + Projects v2 cockpit, behind a
   queue port.)
