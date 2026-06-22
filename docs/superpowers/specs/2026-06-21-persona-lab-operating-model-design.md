@@ -126,7 +126,7 @@ authority sits*; mode says *how it's invoked right now*. Any rank can run in eit
   stay open to every persona, because the human-in-the-loop guarantee must hold either way.
 - **The two modes are the two escalation latencies of one contract:** summoned → advises
   in-session → the human decides synchronously; dispatched → can't reach a live human →
-  escalates via `BLOCKED`/`needs-human` → the PM funnels → it surfaces in `/decisions`.
+  escalates via `BLOCKED`/`needs-human` → the PM funnels → it surfaces in `/inbox`.
 - **Tier decides where a dispatched run executes:** a repo persona runs against its repo (a
   worktree); a platform persona runs from home base, reaching into member repos as a reader; a
   summoned persona joins whatever session the human is driving.
@@ -196,7 +196,7 @@ cadence, in a pipeline ordered by dependency — **Sense → Triage → Act → 
    with readiness tags**, not just raw findings (see below).
 2. **Triage (two-tier funnel)** — repo Analyst → platform PM: split **ready** (→ prioritized Act
    queue) from **parked/blocked** (→ routed for resolution), dedup, frame, escalate only
-   `decision` items to `/decisions`.
+   `decision` items to `/inbox`.
 3. **Act** — the **Developer runs a continuous inner loop**, draining the **ready** queue (bugs
    first) under the writer lock until empty or budget-spent.
 4. **Audit** — acceptance audit on close (event-driven, never blocking): routine/sampled to the repo
@@ -344,7 +344,7 @@ It is split three ways:
 **Resilience — the PM is not a SPOF:**
 - **Act keeps draining `ready` even if a PM triage/audit wake fails** — the queue persists; the watchdog
   re-dispatches the PM.
-- **`/decisions` reads labeled queue state directly**, so a stalled PM never makes the human unreachable
+- **`/inbox` reads labeled queue state directly**, so a stalled PM never makes the human unreachable
   — the framed-but-unsurfaced backlog is still visible (and the budget-pause alert names pending items).
 - **Audit is event-driven, not a blocking stage** — it fires on `event:issue.closed` (always for
   money/correctness/UI, sampled otherwise), lock-free against HEAD, so it never waits behind a long Act
@@ -877,7 +877,7 @@ switch via the port later (trust + cockpit would be re-worked regardless).
   resolution), never membership.
 - **The board is a view over issues, not a second store** — no double-bookkeeping; issues
   remain the source of truth.
-- **The human consumes the `/decisions` slice** (the `needs-human` items the PM framed) and
+- **The human consumes the `/inbox` slice** (the `needs-human` items the PM framed) and
   never curates the board.
 - **Single-repo:** the repo Product Analyst curates; roadmap judgment collapses to the human.
 
@@ -896,23 +896,23 @@ switch via the port later (trust + cockpit would be re-worked regardless).
 
 The human drives interactively; the system makes the PM funnel visible without hunting:
 
-- **`/decisions` command (always available):** aggregates every `needs-human` item (Phase 1:
+- **`/inbox` command (always available):** aggregates every `needs-human` item (Phase 1:
   this repo; Phase 3: portfolio + platform queue) into **two queues — Decisions waiting** (you
   choose) and **Actions for you** (you perform) — PM-framed, highest-leverage first, decided/
   worked in-session and recorded durably. The raw queue stays one command away — curation never
   becomes concealment.
-- **Opt-in session-start line:** a one-liner "N decisions + M actions waiting — run `/decisions`"
+- **Opt-in session-start line:** a one-liner "N decisions + M actions waiting — run `/inbox`"
   (and nothing at all when the queue is empty — silence is a signal).
 - **`/radar` (separate, opt-in):** ambient awareness — other tiers' work, not-yet-ripe future
-  decisions, what everyone's doing. Never mixed into `/decisions`; you pull it only when you want it.
+  decisions, what everyone's doing. Never mixed into `/inbox`; you pull it only when you want it.
 - **Optional scheduled ~9am scan (Phase 4):** runs the cockpit scan and notifies the human
   (channel TBD — push / iMessage / email).
 
 UX rules so it's legible, not a wall:
-- **One front door.** The human must learn exactly *one* surface — the cockpit ("what's mine"); `/radar`
-  (what everyone's doing) and the roster (is the team OK) are **lenses reached from it**, not separate
-  commands to memorize. (Naming: the command holds *both* Decisions and Actions, so `/decisions` is a
-  mild label-lie — strong candidate to rename to `/inbox` or `/needs-you`. Flagged for your call.)
+- **One front door.** The human must learn exactly *one* surface — the cockpit command **`/inbox`**
+  ("what's waiting on me," holding both Decisions and Actions); `/radar` (what everyone's doing) and the
+  roster (is the team OK) are **lenses reached from it**, not separate commands to memorize. (`/inbox` is
+  honest about holding both queues; `/inbox` stays a silent alias for one release.)
 - **Scannable rows.** Every item collapses to a one-line row — `[severity] · who's asking · the ask in
   ≤8 words · what it unblocks` — expand to the full package. Skim first, commit second.
 - **The zero state is designed.** An empty cockpit reads "All clear — N items moving on their own,
@@ -1075,7 +1075,7 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
 | `agents/` | One agent per persona. **Briefing = system prompt; access lock = `tools:` whitelist.** Readers have no `Edit`/`Write`; Developer has full tools. This makes the access lock structural. |
 | `commands/persona-init.md` | The **bootstrap** — runs the interview, writes the instance config. |
 | `commands/persona.md` | Summon/dispatch launcher (replaces `bin/persona`); uses `claude --worktree` for the Developer. |
-| `commands/decisions.md` | The human's cockpit — surfaces what's waiting on the human. |
+| `commands/inbox.md` | The human's cockpit — surfaces what's waiting on the human (`/decisions` = silent alias). |
 | `skills/` + `_disciplines` | The shared disciplines, injected into every persona; the bootstrap skill; later a promote-to-platform skill. |
 
 - **Model vs. instance:** the model (briefings, disciplines, agents) lives in the plugin so
@@ -1100,13 +1100,13 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
    locks + `_disciplines` + voice/tone specs + `/persona` launcher with worktrees + the bus
    discipline/envelope + the four upgrades baked into briefings. The **queue port over GitHub
    Issues** (with the dedup-at-creation fingerprint ledger + report-by-exception), a
-   **PM-curated Projects v2 cockpit from day one**, and the **`/decisions`** command. Validate
+   **PM-curated Projects v2 cockpit from day one**, and the **`/inbox`** command. Validate
    by hand-writing the manifest for one real repo (e.g. `finances`). **Outcome: usable
    personas in a real repo immediately.**
 2. **The bootstrap (`/persona-init`).** The interview that generates the single-repo config.
    *Outcome: "installable, asks questions, then goes."*
 3. **Platform tier.** Portfolio manifest, senior ranks + cross-app artifacts, cross-repo
-   issue bus, home-base execution, the promotion flow, `/decisions` portfolio aggregation.
+   issue bus, home-base execution, the promotion flow, `/inbox` portfolio aggregation.
 4. **Autonomous dispatch & scheduling.** `claude -p`, auto mode, Stop-hook gating, the
    GitHub App bot, scheduled ~9am cockpit scan + notification, fan-out economics enforced.
 
