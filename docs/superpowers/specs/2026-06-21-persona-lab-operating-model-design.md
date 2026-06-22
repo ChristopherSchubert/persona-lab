@@ -269,6 +269,11 @@ The tag is a light stub; deep planning happens when the action is actually pulle
   funnel-position (`triage:repo → triage:platform → needs-human` / `ready` / `parked`); the transition
   *is* the handoff, and only the tier owning the current position may act on it. (This also makes the
   dashboard's "where it sits in the funnel" directly derivable, not inferred.)
+- **The recursion is enforced, not just behavioral.** The `triage:repo → triage:platform` handoff gets
+  the **same structural gate** as `needs-human`: a single-writer transition + required-fields check (the
+  escalating tier must hand up a complete package). The base case (platform→human) was hard-walled; the
+  high-volume recursed case (repo→platform, every cycle) must be too, or "structural, not aspirational"
+  holds only at the top.
 
 **Resolution is async and re-queues.** A blocked action is **parked**, not run. When its blocker
 clears — the human decides, a dependency completes, a coordination partner acts, a clarification
@@ -306,6 +311,10 @@ fixed table.** The platform PM stewards it:
   authority silently (escalate more, be more cautious); it may **never widen** it without explicit
   approval. Delegations are logged, auditable, and revocable by the human at any time. When in
   doubt, escalate.
+- **Repo-readable projection.** The charter is platform-owned but exposes a **read-only projection to
+  the repo tier**, so the Product Analyst's first-cut ("resolve locally vs. escalate") is made against
+  the actual line, not blind — otherwise everything bounces up and re-centralizes the PM. (Same
+  platform-owns / repo-reads discipline as a contract.)
 
 So human decisions do double duty: they unblock the parked action *and* teach the boundary — and the
 boundary only ever loosens by the human's explicit consent.
@@ -316,9 +325,10 @@ rollups, the verification gate) — making it a single-threaded bottleneck and a
 It is split three ways:
 
 - **Protected core (irreducibly PM, judgment-heavy, singular):** the human-escalation funnel (sole gate,
-  framing, the completeness + verification gates, decisions-vs-actions), delegation-charter stewardship,
-  portfolio roadmap/sequencing, and the acceptance-audit *judgment* for money/correctness/UI-critical
-  closes.
+  framing, **completeness *judgment*** — is this decidable cold, riding on the cockpit's deterministic
+  required-field check — and the verification gate, decisions-vs-actions), delegation-charter
+  stewardship, portfolio roadmap/sequencing, and the acceptance-audit *judgment* for
+  money/correctness/UI-critical closes. (The deterministic field-presence check itself is tooling, below.)
 - **Pushed down to the repo Product Analyst:** local queue grooming / dedup / prioritization, local
   thread compaction, first-tier triage (resolve-what-it-can, escalate the rest up), and routine sampled
   acceptance audits. The PM reconciles only the cross-repo remainder.
@@ -905,6 +915,11 @@ resolved against **ground truth**, in order of robustness (the verification hier
 - **the live platform / API** — can it be done programmatically? is it already set? what are the real
   permissions?
 - **the official docs** — what's the actual capability/procedure?
+
+**Verification is bounded, not infinite.** This research step has its **own token budget**; if it can't
+conclude within budget, the item escalates **flagged `under-verified`** with what *was* checked — never
+silently dropped, never researched forever. Escalate-with-partial-evidence beats burning the cycle, and
+the `under-verified` label is itself honest signal to the human.
 
 Only the **irreducible human core** — a genuine judgment call or a genuinely human-only action —
 survives, and it arrives **with its verification evidence** ("checked the code: `X` referenced at
