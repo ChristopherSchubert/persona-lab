@@ -572,7 +572,7 @@ authoritative — no AI banner, decisions not discussion — kept scarce so it c
 ### Comment envelope (one header line + collapsed detail footer)
 
 ```markdown
-🤖 **Sam (Developer)** · FINDING
+<img width="18" src="…/avatars/ben.png"> 🤖 **Ben** (finances Team · Developer) · FINDING
 
 Login rejects valid credentials when the user's device clock runs >30s ahead of the server.
 
@@ -585,11 +585,15 @@ regression test. Low blast radius. Implementing under this issue unless the arch
 a contract concern.
 
 <details><summary>AI persona — not the human</summary>
-Sam (Developer) · finances · dispatched · 2026-06-21 · briefing ↗
+Ben · finances Team · Developer · dispatched · 2026-06-21 · briefing ↗
 </details>
 ```
 
-- **Header (one line):** AI flag + name (role) + record type.
+- **Header (one line):** avatar + AI flag + **name** + **(tier · role)** + record type, where the
+  parenthetical encodes tier and team: **repo-tier → `(<repo> Team · <Role>)`** (e.g. `Ben (finances
+  Team · Developer)`); **platform-tier → `(Platform · <Role>)`** (e.g. `Raj (Platform · Data
+  Architect)`). So every comment shows at a glance whether it's a platform voice or a specific repo's
+  teammate, and which repo.
 - **Body:** the concise record.
 - **Footer (collapsed `<details>`):** provenance — mode, date, briefing link — present but
   uncluttering. Briefing link resolves to the canonical plugin file; manifest may override.
