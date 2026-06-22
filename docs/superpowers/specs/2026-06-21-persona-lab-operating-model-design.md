@@ -659,7 +659,10 @@ The human drives interactively; the system makes the PM funnel visible without h
   choose) and **Actions for you** (you perform) — PM-framed, highest-leverage first, decided/
   worked in-session and recorded durably. The raw queue stays one command away — curation never
   becomes concealment.
-- **Opt-in session-start line:** a one-liner "N decisions + M actions waiting — run `/decisions`".
+- **Opt-in session-start line:** a one-liner "N decisions + M actions waiting — run `/decisions`"
+  (and nothing at all when the queue is empty — silence is a signal).
+- **`/radar` (separate, opt-in):** ambient awareness — other tiers' work, not-yet-ripe future
+  decisions, what everyone's doing. Never mixed into `/decisions`; you pull it only when you want it.
 - **Optional scheduled ~9am scan (Phase 4):** runs the cockpit scan and notifies the human
   (channel TBD — push / iMessage / email).
 
@@ -677,6 +680,22 @@ platform PM's, complete, contextualized, and execution-ready.**
 Repo-level personas (Analysts included) have **no direct-to-human channel**; they route up the funnel.
 Only the platform PM surfaces to the human. Enforced, not advisory — this ends the bounced-between-PMs
 problem.
+
+### Only ripe, mandatory, and yours — no radar
+The most common real-usage failure is the PM handing the human a *radar* (other PMs' work, not-yet-ripe
+future decisions, the PM's own tasks) instead of a *to-do list*. An item reaches the human only if it
+passes **all three gates**:
+1. **Yours** — genuinely the human's call or action, not another persona's, another tier's, or the PM's
+   own work. The PM must never conflate others' work into the human's list.
+2. **Ripe** — every non-human blocker is already cleared; it's actionable *now*. Not-yet-ripe items stay
+   **parked** (the PM tracks them and re-surfaces when the blocker clears) — never floated as a
+   "heads-up."
+3. **Mandatory + complete** — it genuinely needs the human now, and arrives framed (a decision with
+   options + recommendation, or an action with a stepped runbook).
+
+**Silence is the default.** Zero items is normal and good — shown as "you're clear," never backfilled
+with status. Ambient awareness ("what's everyone doing", future maybe-decisions) is a *separate,
+explicitly-requested* view (`/radar`), never mixed into Decisions/Actions.
 
 ### Decisions and actions are different work — split them
 - **`decision`** — a judgment only the human can make. The human *chooses*; renders under **Decisions
