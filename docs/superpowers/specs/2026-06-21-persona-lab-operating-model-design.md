@@ -253,6 +253,10 @@ The tag is a light stub; deep planning happens when the action is actually pulle
   authority, and **escalates to the human** only genuine `decision` items — framed, on the cockpit.
 - Each tier resolves-what-it-can, escalates-the-rest, so the human sees the minimum. This is the
   escalation contract recursed onto blockers, run *in parallel* with Act.
+- **One owner per funnel position — no double-claim, no drop.** An item carries an explicit
+  funnel-position (`triage:repo → triage:platform → needs-human` / `ready` / `parked`); the transition
+  *is* the handoff, and only the tier owning the current position may act on it. (This also makes the
+  dashboard's "where it sits in the funnel" directly derivable, not inferred.)
 
 **Resolution is async and re-queues.** A blocked action is **parked**, not run. When its blocker
 clears — the human decides, a dependency completes, a coordination partner acts, a clarification
@@ -281,7 +285,9 @@ fixed table.** The platform PM stewards it:
   (escalate-by-default).
 - **Learn from every decision.** Each human decision — the framing, the choice, the *why* — is
   captured as signal about the human's judgment, building the PM's model of how this human decides.
-- **Propose expansion, never assume it.** When a consistent pattern emerges ("approved tier bumps
+- **Propose expansion, never assume it — with evidence.** The widening proposal **cites the specific
+  past decisions** it's inferred from, so the human approves against the actual record, not the PM's
+  summary of it. When a consistent pattern emerges ("approved tier bumps
   under $30 three times"), the PM may **offer** to handle that class itself going forward. The
   human must **explicitly approve**; the grant is recorded in the charter.
 - **No silent scope creep — the asymmetry is the safety.** The PM may always *narrow* its own
@@ -779,6 +785,15 @@ The human drives interactively; the system makes the PM funnel visible without h
 - **Optional scheduled ~9am scan (Phase 4):** runs the cockpit scan and notifies the human
   (channel TBD — push / iMessage / email).
 
+Three UX rules so it's legible, not a wall:
+- **Scannable rows.** Every item collapses to a one-line row — `[severity] · who's asking · the ask in
+  ≤8 words · what it unblocks` — expand to the full package. Skim first, commit second.
+- **The zero state is designed.** Empty `/decisions` reads "All clear — N items moving on their own,
+  nothing needs you", not a blank list. The most common healthy state gets real craft.
+- **An at-rest roster** answers the calm-glance question "is the team OK right now?" — each persona with
+  its state (working / idle / blocked / asleep) + avatar + track record. The "feels like a team" promise
+  needs a place you can *see* them, not just a scrolling feed.
+
 See "What reaches the human" for the completeness contract these queues enforce.
 
 ## What reaches the human — decisions, actions, and the completeness contract
@@ -888,9 +903,13 @@ options, exact commands, or doc links — rather than passing up a bare question
   - **a committed, runnable script** where code must execute — not pasted snippets;
   - **official documentation links** for any vendor/UI step — never "go to settings in X";
   - **prerequisites** and a **verification step** (how completion is confirmed).
-  The runbook is produced by the persona closest to the domain (Developer/Architect for CLI/infra; Cost
-  Watch for billing; Head of Security for registrar/secrets — fetching current vendor docs) and validated
-  by the PM before it surfaces.
+  The runbook is produced by the persona closest to the domain (Developer/Architect for CLI/infra; Head
+  of FinOps for billing; Head of Security for registrar/secrets — fetching current vendor docs) and
+  validated by the PM before it surfaces.
+
+Both the decision and action shapes are **required-field checklists the cockpit validates** — an item
+missing a field cannot enter `needs-human`. Completeness is enforced structurally, not by PM judgment
+(same idea as the access lock and the acceptance-criteria contract).
 
 ### Tracking & verification
 Actions are **tracked at step level** in the cockpit: each runbook is a checklist the human works
@@ -898,6 +917,10 @@ through; on "done," the system **verifies where it can** (env var present, key w
 applied) and only then flips the parked action to `ready`. The human is never the unverified link —
 proof, applied gently to human work too. Outstanding decisions and actions **persist** in the cockpit
 (and the daily scan); they never evaporate as chat afterthoughts.
+
+Every step has a **failure path** — "didn't work? → re-open with what you saw", routing straight back
+to the PM funnel. A human who isn't deep in the repo is never stranded on a failed step (the happy path
+isn't the only path).
 
 ## Plugin architecture
 
