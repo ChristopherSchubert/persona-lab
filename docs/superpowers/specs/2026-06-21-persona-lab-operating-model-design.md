@@ -35,7 +35,7 @@ without bloating the model. It is informed by a research pass over 2025–2026 p
 
 ## The grain: a latent two-tier model
 
-The roster has always been *platform-grained* (architect, librarian, design, security,
+The roster has always been *platform-grained* (architect, data, design, security,
 cost are cross-app by nature) while instantiation was *repo-grained* — the source of the
 friction. Resolution:
 
@@ -54,7 +54,7 @@ local-and-within-standard and escalates anything that would change the shared ar
 ### Graduated ranks
 
 A discipline can be a **pair** (senior + junior), **platform-only**, or **repo-only**.
-Senior rank = the strategist who owns the standard (*Maven / Manager / Architect*); junior
+Senior rank = the strategist who owns the standard (*Head of X / Manager / Architect*); junior
 rank = the operator who applies it (*Analyst*). A paired discipline is **one briefing + a
 rank delta**, not two documents — the delta *is* the decides-vs-escalates line.
 
@@ -66,11 +66,11 @@ platform-only. Inventing a junior just for symmetry is the costume-role anti-pat
 | Discipline | Platform rank | Repo rank | Shape |
 |---|---|---|---|
 | Product | **Product Manager** (portfolio roadmap, human funnel) | **Product Analyst** (local queue, acceptance/drift audits) | paired |
-| Security | **Security Maven** (policy, registrar, incident cmd) | **Security Analyst** (local review, files up) | paired |
+| Security | **Head of Security** (policy, registrar, incident cmd) | **Security Analyst** (local review, files up) | paired |
 | Architecture | **Platform Architect** (cross-app contracts, ADRs) | none — Developer + planner cover local design; escalate contract/ADR changes up | platform-only |
-| Design | **Design Maven** (the design system) | **Design Analyst** (local conformance) | paired |
+| Design | **Head of Design** (the design system) | **Design Analyst** (local conformance) | paired |
 | Build | — (no platform twin) | **Developer / writer** | repo-only |
-| Ontology | **Data-model Librarian** (the one shared ontology) | none — Product Analyst drift-audits local conformance | platform-only |
+| Ontology | **Data Architect** (the one shared ontology) | none — Product Analyst drift-audits local conformance | platform-only |
 | Cost | **Cost Watch** (account-level billing) | (local resource-growth check) | platform-leaning |
 | Leak scan | (policy under Security) | **Leak Scanner** (scans this repo) | repo-leaning |
 
@@ -185,7 +185,7 @@ cost_tokens}`. No-ops and declines are recorded *with reasons*. Every bus write 
 
 ### Orchestration: loop the pipeline, not the personas
 
-A fixed round-robin (Developer → Maven → …) makes every cross-persona handoff cost up to a full
+A fixed round-robin (Developer → Head of Security → …) makes every cross-persona handoff cost up to a full
 lap. Instead, **the queue is the scheduler**: personas are dispatched by queue state and
 cadence, in a pipeline ordered by dependency — **Sense → Triage → Act → Audit**, repeating:
 
@@ -418,9 +418,9 @@ repos: [finances, schubert-family, livability-scout]
 engagement:
   product-manager:    { all: owns(roadmap+funnel) }
   platform-architect: { all: owns(contracts+ADRs), reads: all }
-  data-librarian:     { all: owns(ontology), reads: all }
-  design-maven:       { all: sets-standard }
-  security-maven:     { all: owns(policy+registrar) }
+  data-architect:     { all: owns(data-model), reads: all }
+  head-of-design:     { all: sets-standard }
+  head-of-security:   { all: owns(policy+registrar) }
   cost-watch:         { all: owns(billing) }
   developer:          { per-repo: writer }
   product-analyst:    { per-repo: owns(local queue) }
@@ -479,7 +479,7 @@ Same finding, three voices — identical content, distinct people, none wasteful
   runs >30s fast — `verifyToken()` in `auth/session.ts` rejects any JWT with a future `iat`,
   zero skew tolerance. Repro: clock +45s → 401. Fixing with a 60s `clockTolerance` plus a
   regression test; low risk."
-- **Security Maven** (blunt, risk-first): "Zero clock-skew tolerance in token verification
+- **Head of Security** (blunt, risk-first): "Zero clock-skew tolerance in token verification
   locks out users whose device clock runs fast (>30s). Correctness/availability bug, not a
   breach — a 60s window is safe and standard. Pin it with a test so the tolerance can't
   quietly grow later."
@@ -495,10 +495,10 @@ The tone spec carried in each briefing:
 | **Product Manager** | calm, decisive, sequencing | a steady lead who turns a mess into a ranked list |
 | **Product Analyst** | diligent, operational, close to the work | the PM's sharp junior keeping the local queue honest |
 | **Platform Architect** | measured, systems-minded, long-view | someone who sees the migration coming six months early |
-| **Design Maven** | opinionated, exacting about craft | a designer who twitches at three slightly different blues |
+| **Head of Design** | opinionated, exacting about craft | a designer who twitches at three slightly different blues |
 | **Design Analyst** | practical, detail-attentive | catches drift from the system, repo by repo |
-| **Data-model Librarian** | meticulous, precise, lightly pedantic | a librarian who insists one thing has exactly one name |
-| **Security Maven** | blunt, risk-first, severe | the one who says "rotate it now," not "consider rotating" |
+| **Data Architect** | meticulous, precise, lightly pedantic | a librarian who insists one thing has exactly one name |
+| **Head of Security** | blunt, risk-first, severe | the one who says "rotate it now," not "consider rotating" |
 | **Security Analyst** | careful, methodical, thorough | runs the checklist; escalates the severity call |
 | **Leak Scanner** | factual, mechanical, evidence-only | a detector — location + match, no opinions |
 | **Cost Watch** | dry, numbers-first, deadpan | an accountant who speaks in deltas and dollars |
@@ -649,7 +649,7 @@ options, exact commands, or doc links — rather than passing up a bare question
   - **official documentation links** for any vendor/UI step — never "go to settings in X";
   - **prerequisites** and a **verification step** (how completion is confirmed).
   The runbook is produced by the persona closest to the domain (Developer/Architect for CLI/infra; Cost
-  Watch for billing; Security Maven for registrar/secrets — fetching current vendor docs) and validated
+  Watch for billing; Head of Security for registrar/secrets — fetching current vendor docs) and validated
   by the PM before it surfaces.
 
 ### Tracking & verification
