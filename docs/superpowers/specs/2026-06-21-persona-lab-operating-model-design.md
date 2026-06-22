@@ -148,7 +148,7 @@ dispatch mechanism (Phase 4) constructs and injects it; the model just defines i
 
 Every wake writes one **structured run record** (NDJSON), keyed for slicing by `persona`, `repo`,
 `cycle_id`, `correlation_id`, time: `{ts_start, ts_end, trigger, stage, mode, persona, rank, repo,
-actor, outcome: acted|slept|escalated|blocked, actions[], declined:[{what,why}], links[],
+actor, outcome: acted|slept|escalated|parked, actions[], declined:[{what,why}], links[],
 cost_tokens}`. No-ops and declines are recorded *with reasons*. Every bus write is stamped with the
 `correlation_id` (extending the comment-envelope footer) so issues created in a cycle tie back to it.
 
@@ -452,7 +452,7 @@ cross-linked issues per repo; the Projects cockpit shows progress. The rare *gen
 
 The team is declared, not ambient. One file (lives in the platform repo; trivial/absent for
 single-repo) declares membership and a persona×repo **capacity matrix** from a small fixed
-vocabulary: `owns` / `sets-standard` / `audits` / `advises` / `writer` / `reads` /
+vocabulary: `owns` / `audits` / `advises` / `writes` / `reads` /
 `not-engaged`. It is machine-readable — the launcher and dispatch read it to know who may
 touch what.
 
@@ -463,11 +463,11 @@ engagement:
   product-manager:    { all: owns(roadmap+funnel) }
   platform-architect: { all: owns(contracts+ADRs), reads: all }
   data-architect:     { all: owns(data-model), reads: all }
-  head-of-design:     { all: sets-standard }
+  head-of-design:     { all: owns(design-system) }
   head-of-security:   { all: owns(policy+registrar) }
   head-of-finops:     { all: owns(billing) }
   lead-engineer:      { all: owns(eng-standards), audits: all }
-  developer:          { per-repo: writer }
+  developer:          { per-repo: writes }
   product-analyst:    { per-repo: owns(local queue) }
   security-analyst:   { per-repo: audits }   # incl. deterministic leak scanning
 ```
@@ -557,6 +557,59 @@ The tone spec carried in each briefing:
 Paired ranks share a discipline's tone; the senior is more declarative and strategic, the
 analyst more operational. The **human's** own voice is the deliberate contrast: plain, brief,
 authoritative — no AI banner, decisions not discussion — kept scarce so it carries weight.
+
+## Status & vocabulary — the canonical IA
+
+One dimension, one home; every other section references these enumerations rather than re-coining.
+
+### Work-item status (the state machine)
+A single Projects v2 single-select, mirrored by GitHub open/closed:
+`intake → proposed → ready → in-progress → in-review → done`, with **parked** as a side state (any open
+item can park on a blocker and returns to `ready` when it clears), and `declined` / `duplicate` as
+alternative terminal closes.
+
+| Status | Meaning | GitHub |
+|---|---|---|
+| intake | external/untrusted item awaiting trust validation (quarantine) | open |
+| proposed | sensed; a proposed action awaiting triage | open |
+| ready | triaged, verified, actionable now — in the Act queue | open |
+| in-progress | Developer holds it under the writer lock | open |
+| in-review | Lead Engineer code review + PM acceptance audit | open |
+| parked | blocked (carries a blocker reason); → ready when cleared | open |
+| done | acceptance met, proof attached | closed · completed |
+| declined | won't-do / out of scope | closed · not_planned |
+| duplicate | folded into another | closed · duplicate |
+
+### Blockers and the human lifecycle
+A `parked` item carries one **blocker type**: `dependency · coordination · clarification · decision ·
+action`. The two human-only types — **decision** and **action** — are exactly the cockpit's two queues,
+but only after the PM admits them (ripe + verified + complete). One lifecycle, three names for one
+object:
+`blocked:decision` (parked, proposed) → `needs-human:decision` (PM-admitted to the Decisions queue) →
+`DECISION` (recorded resolution) → item flips back to `ready`/`done`. (Same for action: `blocked:action`
+→ `needs-human:action` → recorded + verified completion.)
+
+### Two taxonomies, distinct objects — don't conflate
+- **Work-item status** (above) = where the *item* is.
+- **Run-record `outcome`** (`acted · slept · escalated · parked`) = what a *wake* did. A wake that parks
+  its item ends `outcome:parked` and moves the item to `parked` (renamed from `blocked` so it matches
+  the item state and doesn't collide with the blocker vocabulary).
+- **Comment record-types** (`FINDING · PROPOSAL · DECISION · HANDOFF · PROOF · BLOCKED`) = what a comment
+  records about a transition.
+
+### Capacity vocabulary (manifest)
+Closed verb set: `owns · audits · advises · writes · reads · not-engaged`. `owns(<artifact>)` names the
+one canonical cross-app artifact a platform persona owns *and evolves* — the standard is embodied in the
+artifact, so there is **no separate `sets-standard`**. `writes` (not `writer`) is the lock-holding
+capacity, parallel to `reads` / `audits`.
+
+### Engagement: mode vs trigger (nested, not parallel)
+- **Mode** ∈ { **summon**, **dispatch** } — summon = interactive/human-initiated; dispatch = autonomous.
+- **Trigger** applies *only to dispatch* ∈ { **on-demand**, **scheduled**, **event:<name>** }. A
+  `scheduled` trigger is what drives a Sense→Triage→Act→Audit *cycle* — "cycle" is the activity, not a
+  separate trigger.
+- The manifest and the wake-context use this one enum: a persona's trigger set is drawn from
+  { summon, on-demand, scheduled, event:<name> } (summon being the mode-as-trigger shorthand).
 
 ## The issue bus discipline
 
