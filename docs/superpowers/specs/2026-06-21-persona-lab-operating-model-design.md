@@ -306,6 +306,36 @@ badly). It governs the right to **integrate to the repo's main line — one writ
 - **Granularity:** per-repo. Finer per-module locks are a future option for a large, partitionable
   repo — not now.
 
+## Failure paths & cost guardrails
+
+The "build the failure path first-class" layer; shares the watchdog/reaper with lock recovery.
+
+### Failure paths
+- **Detection** via the run-log + heartbeat: a wake with `ts_start` and no yield record =
+  orphaned/crashed; a writer's dead heartbeat = crashed writer. The **watchdog/reaper** scans both.
+- **Recovery by type:** writer crash → stale-lock recovery (rollback to checkpoint, file issue,
+  release lock); reader crash → mark failed, re-dispatch (safe — the lifecycle is
+  re-entrant/idempotent).
+- **No lingering half-work:** commit-checkpoint discipline keeps the tree recoverable to green;
+  partial work is discarded or salvaged into an issue.
+- **Stalled cycle:** a stage not advancing within a timeout → the watchdog aborts/restarts, logs,
+  surfaces if persistent.
+- **Circuit breaker:** an action failing N times is parked (`blocked-by:clarification` or escalated)
+  *with its failure history* — never retried forever, so a poison item can't loop the fleet.
+
+### Cost guardrails
+- **Budget ceiling — per-day global cap, hard-pause + alert.** One daily token/$ ceiling across the
+  fleet; dispatch checks it before each wake. At the limit, **new dispatch pauses**, in-flight work
+  finishes, the human is alerted. A hard ceiling; raising it is a **human decision** (money).
+- **Runaway-loop backstops:** caps on wakes/cycle, retries/action (the breaker), agents/cycle (the
+  fan-out cap).
+- **Attribution + ownership:** the run-log's `cost_tokens` feeds Cost Watch + the dashboard; Cost
+  Watch monitors spend and escalates. Cheapest-capable-model per task (optional per-persona model in
+  the manifest).
+
+These compound with the economy measures already in the model (report-by-exception, dedup, concision,
+fan-out discipline): those *reduce* spend; the guardrails *bound* it.
+
 ## The portfolio manifest
 
 The team is declared, not ambient. One file (lives in the platform repo; trivial/absent for
@@ -570,6 +600,8 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
 7. Tooling: worktrees on? auto mode for unattended Developer? claim a port range?
 8. Seed the platform PM's **delegation charter** conservatively (escalate-by-default); the PM
    proposes widening it over time as it learns the human's judgment, never without approval.
+9. Daily **budget ceiling** (token/$) — hard-pause + alert at the limit; raising it is a human
+   decision.
 
 ## Appendix B — primary sources informing the upgrades
 
