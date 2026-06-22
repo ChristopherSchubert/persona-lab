@@ -202,10 +202,22 @@ cadence, in a pipeline ordered by dependency — **Sense → Triage → Act → 
 4. **Audit** — acceptance audit on close (event-driven, never blocking): routine/sampled to the repo
    Analyst, money/correctness/UI to the PM.
 
-**Review is two lenses.** Before close, the **Lead Engineer** (reader, fresh context) independently
-reviews the Developer's PR for correctness and craft — separate from the PM's acceptance audit. Both
-run in the `In review` state; the Developer never reviews its own code (the Writer/Reviewer
-separation Anthropic's guidance endorses).
+**`in-review` is two ordered, structurally-enforced gates** (the Developer never reviews its own code):
+1. **Lead Engineer — code & scope** (reader, fresh context): correctness, craft, and **scope-of-diff vs.
+   the issue** (is this a smuggled design?). Runs first, fails fast. Emits a **`REVIEW` record** with a
+   verdict — `approved` / `changes-requested` / `bounce:out-of-scope`. Invokes the Architect *only* when
+   a design/contract trip-wire fires (not a parallel reviewer).
+2. **PM — acceptance of outcome** (runs on a LE pass): does the closed result satisfy the issue's
+   **acceptance bullets** (rendered output, not the diff).
+
+Bright line, no double-claim: **scope-of-diff is the Lead Engineer's; acceptance-of-outcome is the
+PM's.** Both must record a pass before an item may reach `done` (same required-field validation as
+`needs-human`). A bounce from either flips the item back to **`ready`** carrying a `changes-requested`
+record — it re-enters the Act queue and the writer lock is re-claimed through the normal path (no
+review-special lock handling). Scope/size are adjudicated against numbers, not opinion: a **`diff_budget`
+{max_lines, max_files} in the verification manifest**, and **checkable acceptance bullets as a required
+field at `ready`** — so the same numbers the Developer's trip-wires use are what the reviewer and a
+pre-merge script enforce.
 
 This dissolves handoff latency: a finding lands in the queue, the PM triages it, the Developer's
 *next pull* takes it — latency is "queue + one PM groom," not "one full round-robin." Nothing
@@ -234,7 +246,7 @@ resolve in parallel. The human is a *resolver of one blocker type, reached async
 a gate the cycle waits on.
 
 **Personas emit proposed actions, not just findings.** At Sense, each piece of work comes with
-*what the persona would do* plus a **readiness tag**: `ready`, or `blocked-by` one of —
+*what the persona would do* plus a **readiness tag**: `unblocked`, or `blocked-by` one of —
 - **dependency** — needs another action/issue done first (intra- or cross-repo);
 - **coordination** — needs another persona/repo to act in concert (e.g. a cross-app contract);
 - **clarification** — needs an answer (from a persona, a PM, or the human);
@@ -579,8 +591,12 @@ engagement:
    auto-verified (a secret the runner can't read back, a vendor-console toggle), the runbook carries a
    **non-revealing verification command** the human runs and pastes the result of (`gh secret list |
    grep NAME` = presence+timestamp, not value; a health-check returning 200); where even that's
-   impossible the item closes **`human-attested`**, logged as such — never claim verification you can't
-   perform.
+   impossible the item closes **`human-attested`** — never claim verification you can't perform. But
+   `human-attested` is not a free pass: it **cannot be self-issued** by the closing persona (a second
+   identity — the human or the Lead Engineer — attests), it carries a **required-field record** (what was
+   checked, why it can't be auto-verified, who attested), and the **per-persona/per-repo
+   `human-attested` rate is surfaced in the rollup** (a rising trend is itself a finding) — so the
+   cheapest way to go green can't quietly become the default.
 2. **Context hygiene.** Context is finite; attention degrades as the window fills. Levers:
    **compaction** (near-full window → summarize, reinitiate fresh) and **note-taking**
    (externalize durable state *as you go* to issues/ADRs). The window is scratch space;
@@ -667,18 +683,18 @@ One dimension, one home; every other section references these enumerations rathe
 
 ### Work-item status (the state machine)
 A single Projects v2 single-select, mirrored by GitHub open/closed:
-`intake → proposed → ready → in-progress → in-review → done`, with **parked** as a side state (any open
-item can park on a blocker and returns to `ready` when it clears), and `declined` / `duplicate` as
+`quarantine → proposed → ready → in-progress → in-review → done`, with **parked** as a side state (any
+open item can park on a blocker and returns to `ready` when it clears), and `declined` / `duplicate` as
 alternative terminal closes.
 
 | Status | Meaning | GitHub |
 |---|---|---|
-| intake | external/untrusted item awaiting trust validation (quarantine) | open |
+| quarantine | external/untrusted item awaiting trust validation | open |
 | proposed | sensed; a proposed action awaiting triage | open |
 | ready | triaged, verified, actionable now — in the Act queue | open |
 | in-progress | Developer holds it under the writer lock | open |
-| in-review | Lead Engineer code review + PM acceptance audit | open |
-| parked | blocked (carries a blocker reason); → ready when cleared | open |
+| in-review | two gates — Lead Engineer code review, then PM acceptance audit | open |
+| parked | parked on a blocker type; → ready when cleared | open |
 | done | acceptance met, proof attached | closed · completed |
 | declined | won't-do / out of scope | closed · not_planned |
 | duplicate | folded into another | closed · duplicate |
@@ -688,23 +704,31 @@ A `parked` item carries one **blocker type**: `dependency · coordination · cla
 action`. The two human-only types — **decision** and **action** — are exactly the cockpit's two queues,
 but only after the PM admits them (ripe + verified + complete). One lifecycle, three names for one
 object:
-`blocked:decision` (parked, proposed) → `needs-human:decision` (PM-admitted to the Decisions queue) →
-`DECISION` (recorded resolution) → item flips back to `ready`/`done`. (Same for action: `blocked:action`
-→ `needs-human:action` → recorded + verified completion.)
+`blocked-by:decision` (parked) → `needs-human:decision` (PM-admitted to the Decisions queue) →
+`DECISION` (recorded resolution) → item flips back to `ready`/`done`. (Same for action:
+`blocked-by:action` → `needs-human:action` → recorded + verified completion.) The blocker token is
+**`blocked-by:<type>`** everywhere — one spelling.
+
+**Funnel position** is a separate dimension: an `owner` field on a pre-`ready` item
+(`triage:repo → triage:platform`), **not** new status values — only `quarantine`/`proposed`/`ready`/
+`parked`/… are statuses. The position names which tier currently owns the item; the transition is the
+handoff (see "Decisions don't block the cycle"). And **readiness** at Sense (`unblocked` vs
+`blocked-by:*`) is a property of a `proposed` item, distinct from the post-triage status `ready`.
 
 ### Two taxonomies, distinct objects — don't conflate
 - **Work-item status** (above) = where the *item* is.
 - **Run-record `outcome`** (`acted · slept · escalated · parked`) = what a *wake* did. A wake that parks
   its item ends `outcome:parked` and moves the item to `parked` (renamed from `blocked` so it matches
   the item state and doesn't collide with the blocker vocabulary).
-- **Comment record-types** (`FINDING · PROPOSAL · DECISION · HANDOFF · PROOF · BLOCKED`) = what a comment
+- **Comment record-types** (`FINDING · PROPOSAL · DECISION · HANDOFF · PROOF · REVIEW · BLOCKED`) = what a comment
   records about a transition.
 
 ### Capacity vocabulary (manifest)
 Closed verb set: `owns · audits · advises · writes · reads · not-engaged`. `owns(<artifact>)` names the
-one canonical cross-app artifact a platform persona owns *and evolves* — the standard is embodied in the
-artifact, so there is **no separate `sets-standard`**. `writes` (not `writer`) is the lock-holding
-capacity, parallel to `reads` / `audits`.
+canonical artifact a persona owns *and evolves* — **cross-app for the platform tier, repo-local for the
+repo tier** (e.g. the Product Analyst `owns(local queue)`); the standard is embodied in the artifact, so
+there is **no separate `sets-standard`**. `writes` (not `writer`) is the lock-holding capacity, parallel
+to `reads` / `audits`.
 
 ### Engagement: mode vs trigger (nested, not parallel)
 - **Mode** ∈ { **summon**, **dispatch** } — summon = interactive/human-initiated; dispatch = autonomous.
@@ -717,7 +741,7 @@ capacity, parallel to `reads` / `audits`.
 ## The issue bus discipline
 
 - **Comments are typed, discrete state records — not conversation.** Vocabulary:
-  `FINDING` · `PROPOSAL` · `DECISION` · `HANDOFF` · `PROOF` · `BLOCKED(needs-human)`. One
+  `FINDING` · `PROPOSAL` · `DECISION` · `HANDOFF` · `PROOF` · `REVIEW` · `BLOCKED`. One
   self-contained record of a state transition per comment.
 - **Personas do not converse in-thread.** No persona-to-persona dialogue (they already
   never talk directly). A persona posts a finding → PM frames → human decides. Dialogue is
