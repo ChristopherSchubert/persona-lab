@@ -728,6 +728,28 @@ never a bare claim.
 - **The PM is the verification gate, not just the framing gate** — it bounces an under-verified
   escalation back ("verify it's actually needed first") exactly as it bounces an incomplete one.
 
+### Oversight is a spectrum — the human sets it
+How much surfaces to the human is a **preference, not a fixed rule**. Some want only the irreducible
+mandatory steps; others want to watch everything — the radar, the verification reasoning, every wake.
+The system supports the full range via an **oversight profile** the human sets at bootstrap and adjusts
+anytime (overridable per domain/severity — e.g. high visibility on security & money, minimal on routine
+dev). Three knobs:
+- **Visibility:** *minimal* (only ripe mandatory decisions/actions; silence otherwise — the default) →
+  *standard* (＋ a daily digest) → *high* (＋ `/radar` pushed, verification evidence and intermediate
+  proposals shown) → *observe-everything* (the live feed, every wake, full reasoning).
+- **Involvement:** the delegation-charter breadth — tight (escalate more, the human decides more) ↔
+  loose (the agent decides more). Already a first-class, learning artifact.
+- **Cadence/channel:** push vs pull, daily scan on/off, notification thresholds.
+
+The surfaces that feed higher visibility already exist (the cockpit, `/radar`, the dashboard/live feed,
+the run-log, verification evidence); the profile just decides which are *pushed* vs *pull-only*.
+
+**Invariant: visibility never lowers the verification bar.** Even at *observe-everything*, what's shown
+is *verified* radar and reasoning — not a return to dumping unverified claims; the human is still never
+the unverified link. Configurability changes how much is *displayed*, never what's *true* or *safe*. The
+no-radar / silence-default rules above are simply the *minimal* end of the dial — correct for most, not
+imposed on all.
+
 ### Decisions and actions are different work — split them
 - **`decision`** — a judgment only the human can make. The human *chooses*; renders under **Decisions
   waiting**.
@@ -828,6 +850,8 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
    decision.
 10. Repo visibility (public/private) — public repos treat all non-human/non-bot content as
     untrusted, quarantined to triage.
+11. **Oversight profile** — visibility (minimal → observe-everything), involvement (delegation-charter
+    breadth), cadence/channel; default minimal, adjustable anytime, overridable per domain/severity.
 
 ## Appendix B — primary sources informing the upgrades
 
