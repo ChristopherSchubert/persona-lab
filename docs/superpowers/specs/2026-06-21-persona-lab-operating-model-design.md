@@ -229,7 +229,9 @@ a gate the cycle waits on.
 - **dependency** — needs another action/issue done first (intra- or cross-repo);
 - **coordination** — needs another persona/repo to act in concert (e.g. a cross-app contract);
 - **clarification** — needs an answer (from a persona, a PM, or the human);
-- **decision** — needs a human-authority call (money / direction / irreversible).
+- **decision** — needs a human *judgment* call (which option? approve the spend? direction?);
+- **action** — needs a human-only *operation* performed (set a secret, run a prod migration,
+  configure a vendor console, rotate a key). See "What reaches the human".
 
 The tag is a light stub; deep planning happens when the action is actually pulled.
 
@@ -598,13 +600,59 @@ to later, via the port.
 The human drives interactively; the system makes the PM funnel visible without hunting:
 
 - **`/decisions` command (always available):** aggregates every `needs-human` item (Phase 1:
-  this repo; Phase 3: portfolio + platform queue), renders them **PM-framed** (crisp options
-  + recommendation, highest-leverage first), lets the human decide in-session, and records
-  the decision durably. The raw queue stays one command away — curation never becomes
-  concealment.
-- **Opt-in session-start line:** a one-liner "N decisions waiting — run `/decisions`".
+  this repo; Phase 3: portfolio + platform queue) into **two queues — Decisions waiting** (you
+  choose) and **Actions for you** (you perform) — PM-framed, highest-leverage first, decided/
+  worked in-session and recorded durably. The raw queue stays one command away — curation never
+  becomes concealment.
+- **Opt-in session-start line:** a one-liner "N decisions + M actions waiting — run `/decisions`".
 - **Optional scheduled ~9am scan (Phase 4):** runs the cockpit scan and notifies the human
   (channel TBD — push / iMessage / email).
+
+See "What reaches the human" for the completeness contract these queues enforce.
+
+## What reaches the human — decisions, actions, and the completeness contract
+
+Running this for real surfaced a failure mode: multiple PMs pinging the human directly; action items
+dropped as context-free afterthoughts that accumulate until they're undecidable; and "go do X in the
+vendor dashboard" guidance too vague to act on when the human isn't hands-on with the repo. The
+principle: **the human's attention is the scarcest resource — nothing reaches them that isn't the
+platform PM's, complete, contextualized, and execution-ready.**
+
+### Only the platform PM reaches the human — hard rule
+Repo-level personas (Analysts included) have **no direct-to-human channel**; they route up the funnel.
+Only the platform PM surfaces to the human. Enforced, not advisory — this ends the bounced-between-PMs
+problem.
+
+### Decisions and actions are different work — split them
+- **`decision`** — a judgment only the human can make. The human *chooses*; renders under **Decisions
+  waiting**.
+- **`action`** — an operation only the human can *perform* (secret, prod migration, vendor console,
+  key rotation). The human *does*, then it's verified; renders under **Actions for you**.
+
+### The completeness contract — no afterthoughts
+The platform PM **may not surface an item until it is complete enough to act on cold** (the human is
+not deep in the repo). It gathers the missing context *first* — dispatching a persona to research
+options, exact commands, or doc links — rather than passing up a bare question.
+- **A decision package carries:** the question, why now, mutually-exclusive options, a recommendation +
+  rationale, the consequences, and what it unblocks — decidable without hunting for context. The
+  "I don't know — you recommend" path is always open and feeds the delegation charter.
+- **An action package carries a runbook, not prose:**
+  - *why* it's needed and *why it can't be automated* (a human-only boundary, not laziness);
+  - **ordered steps**;
+  - **exact CLI commands, one per line, copyable** — never "run the thing";
+  - **a committed, runnable script** where code must execute — not pasted snippets;
+  - **official documentation links** for any vendor/UI step — never "go to settings in X";
+  - **prerequisites** and a **verification step** (how completion is confirmed).
+  The runbook is produced by the persona closest to the domain (Developer/Architect for CLI/infra; Cost
+  Watch for billing; Security Maven for registrar/secrets — fetching current vendor docs) and validated
+  by the PM before it surfaces.
+
+### Tracking & verification
+Actions are **tracked at step level** in the cockpit: each runbook is a checklist the human works
+through; on "done," the system **verifies where it can** (env var present, key works, migration
+applied) and only then flips the parked action to `ready`. The human is never the unverified link —
+proof, applied gently to human work too. Outstanding decisions and actions **persist** in the cockpit
+(and the daily scan); they never evaporate as chat afterthoughts.
 
 ## Plugin architecture
 
