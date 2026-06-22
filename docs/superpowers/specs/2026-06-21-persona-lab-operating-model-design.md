@@ -70,6 +70,7 @@ platform-only. Inventing a junior just for symmetry is the costume-role anti-pat
 | Architecture | **Platform Architect** (cross-app contracts, ADRs) | none — Developer + planner cover local design; escalate contract/ADR changes up | platform-only |
 | Design | **Head of Design** (the design system) | **Design Analyst** (local conformance) | paired |
 | Build | — (no platform twin) | **Developer / writer** | repo-only |
+| Engineering review | **Lead Engineer** (code review, eng standards) | none — reviews each repo's PRs as a reader | platform-only |
 | Ontology | **Data Architect** (the one shared ontology) | none — Product Analyst drift-audits local conformance | platform-only |
 | Cost | **Cost Watch** (account-level billing) | (local resource-growth check) | platform-leaning |
 | Leak scan | (policy under Security) | **Leak Scanner** (scans this repo) | repo-leaning |
@@ -197,6 +198,11 @@ cadence, in a pipeline ordered by dependency — **Sense → Triage → Act → 
 3. **Act** — the **Developer runs a continuous inner loop**, draining the **ready** queue (bugs
    first) under the writer lock until empty or budget-spent.
 4. **Audit** — the PM acceptance-audits the closed work.
+
+**Review is two lenses.** Before close, the **Lead Engineer** (reader, fresh context) independently
+reviews the Developer's PR for correctness and craft — separate from the PM's acceptance audit. Both
+run in the `In review` state; the Developer never reviews its own code (the Writer/Reviewer
+separation Anthropic's guidance endorses).
 
 This dissolves handoff latency: a finding lands in the queue, the PM triages it, the Developer's
 *next pull* takes it — latency is "queue + one PM groom," not "one full round-robin." Nothing
@@ -422,6 +428,7 @@ engagement:
   head-of-design:     { all: sets-standard }
   head-of-security:   { all: owns(policy+registrar) }
   cost-watch:         { all: owns(billing) }
+  lead-engineer:      { all: owns(eng-standards), audits: all }
   developer:          { per-repo: writer }
   product-analyst:    { per-repo: owns(local queue) }
   leak-scanner:       { per-repo: audits }
@@ -494,6 +501,7 @@ The tone spec carried in each briefing:
 | Persona | Tone | Reads like |
 |---|---|---|
 | **Developer** | precise, code-first, understated | an engineer who'd rather show the diff than discuss it |
+| **Lead Engineer** | exacting, standards-driven, constructive | a principal who blocks the PR but tells you exactly why |
 | **Product Manager** | calm, decisive, sequencing | a steady lead who turns a mess into a ranked list |
 | **Product Analyst** | diligent, operational, close to the work | the PM's sharp junior keeping the local queue honest |
 | **Platform Architect** | measured, systems-minded, long-view | someone who sees the migration coming six months early |
