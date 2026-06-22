@@ -252,6 +252,34 @@ The dashboard reflects this with a **parked set** beside decisions-waiting: each
 its blocker type, and where it sits in the funnel — so "why isn't this done yet?" is always
 answerable.
 
+### The human-decision boundary — the platform PM stewards it
+
+**Only the platform PM may mark an item `needs-human`.** Other personas (including repo Analysts)
+can only *propose* `blocked-by:decision` — a proposal routed up the funnel; the platform PM is the
+sole gate to the human's decision queue and decides whether an item is truly human-class and how to
+frame it. One funnel, one gatekeeper, so the human is never flooded by personas each self-declaring
+"this needs you." (The narrow **incident path** — time-critical + high-blast-radius — remains a
+separate emergency alarm, not a decision-queue item; PM cc'd.)
+
+**The boundary between what the PM may decide and what it must escalate is a living artifact, not a
+fixed table.** The platform PM stewards it:
+- **Establish up front.** Before running autonomously, the platform PM aligns with the human on
+  what it may decide alone vs. must escalate — a concrete, versioned **delegation charter** (a
+  personalized, evolving form of the human's decides/escalates contract), seeded conservatively
+  (escalate-by-default).
+- **Learn from every decision.** Each human decision — the framing, the choice, the *why* — is
+  captured as signal about the human's judgment, building the PM's model of how this human decides.
+- **Propose expansion, never assume it.** When a consistent pattern emerges ("approved tier bumps
+  under $30 three times"), the PM may **offer** to handle that class itself going forward. The
+  human must **explicitly approve**; the grant is recorded in the charter.
+- **No silent scope creep — the asymmetry is the safety.** The PM may always *narrow* its own
+  authority silently (escalate more, be more cautious); it may **never widen** it without explicit
+  approval. Delegations are logged, auditable, and revocable by the human at any time. When in
+  doubt, escalate.
+
+So human decisions do double duty: they unblock the parked action *and* teach the boundary — and the
+boundary only ever loosens by the human's explicit consent.
+
 ## The portfolio manifest
 
 The team is declared, not ambient. One file (lives in the platform repo; trivial/absent for
@@ -495,6 +523,8 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
 6. Per persona: trigger mix (summon-only / on-demand / scheduled / event — event named) +
    access lock.
 7. Tooling: worktrees on? auto mode for unattended Developer? claim a port range?
+8. Seed the platform PM's **delegation charter** conservatively (escalate-by-default); the PM
+   proposes widening it over time as it learns the human's judgment, never without approval.
 
 ## Appendix B — primary sources informing the upgrades
 
