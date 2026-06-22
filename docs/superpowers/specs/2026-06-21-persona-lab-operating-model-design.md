@@ -469,7 +469,9 @@ Developer ("Alex") — so you build relationships with specific people assigned 
 - **Naming is the human's.** Bootstrap proposes names; the human can set or rename any at any time —
   cosmetic, never touches authority/access. Stored in the roster (manifest). Proposed names should be
   **plain and clearly human** (ordinary first names, not fanciful) and **phonetically distinct** from
-  one another so teammates are never confused.
+  one another so teammates are never confused. The 15-name pools per repo-tier persona
+  (gender-diverse, role-flavored, no cross-persona reuse) live in `docs/personas/name-pools.md`;
+  the bootstrap draws a distinct name per repo.
 - **Visual identity:** name + initial avatar + the persona colour, so the dashboard roster reads
   like a team you manage, not a process list.
 - **The guardrail:** identity serves legibility and delight, never trust or cost. The AI-flag stays
