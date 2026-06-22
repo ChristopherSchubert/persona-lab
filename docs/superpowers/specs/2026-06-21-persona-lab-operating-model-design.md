@@ -640,6 +640,11 @@ options, exact commands, or doc links — rather than passing up a bare question
   - *why* it's needed and *why it can't be automated* (a human-only boundary, not laziness);
   - **ordered steps**;
   - **exact CLI commands, one per line, copyable** — never "run the thing";
+  - **sensitive values go into interactive prompts, never into a command the human edits** —
+    the command names the key and lets the CLI prompt for the value, hidden where possible
+    (`gh secret set NAME`, `vercel env add NAME`, `read -s`), so copyable lines never contain a
+    secret and nothing lands in shell history/`ps`/logs; paste-into-command is a flagged last
+    resort only when no interactive option exists;
   - **a committed, runnable script** where code must execute — not pasted snippets;
   - **official documentation links** for any vendor/UI step — never "go to settings in X";
   - **prerequisites** and a **verification step** (how completion is confirmed).
