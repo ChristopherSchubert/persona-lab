@@ -443,16 +443,29 @@ The "build the failure path first-class" layer; shares the watchdog/reaper with 
 - **Budget ceiling — per-day global cap, hard-pause + alert.** One daily token/$ ceiling across the
   fleet; dispatch checks it before each wake. At the limit, **new dispatch pauses**, in-flight work
   finishes, the human is alerted. A hard ceiling; raising it is a **human decision** (money).
-- **Per-cycle + per-wake budgets (not just per-day).** The daily cap is drained in tranches (e.g.
-  hourly) so one bad cycle can't burn the whole day; each Sense→Triage→Act→Audit cycle carries its own
-  token budget (the Act loop's "until budget-spent" *is* that number), and each wake a soft ceiling that
-  escalates rather than silently continuing. Count-based backstops don't bound a single expensive wake —
-  token budgets do.
+- **Per-cycle budget is a decrementing ledger, not a label.** The daily cap is drained in tranches; each
+  cycle gets a token budget held as a **live ledger** (`cycle_budget_remaining`) debited per wake from
+  the run-log's `cost_tokens` — Sense/Triage debit first, Act's "until budget-spent" reads the *remaining*
+  balance, not a static figure. Each wake also has a soft ceiling that escalates rather than silently
+  continuing. (Count-based backstops don't bound a single expensive wake — token budgets do.)
 - **Runaway-loop backstops:** caps on wakes/cycle, retries/action (the breaker), agents/cycle (the
   fan-out cap).
-- **Attribution + ownership:** the run-log's `cost_tokens` feeds Head of FinOps + the dashboard; Cost
-  Watch monitors spend and escalates. Cheapest-capable-model per task (optional per-persona model in
-  the manifest).
+- **Risk-tier the close path.** The two review lenses + E2E are gated to risk, not paid on every close:
+  full Lead-Engineer review + browser E2E for code touching contracts/auth/money/migrations or UI
+  surfaces; a **deterministic-only gate** (tests + lint + diff-budget + scope-check, no model) for
+  chore/trivial closes. E2E runs only when the diff actually touches a UI surface; its **artifacts go to
+  a TTL'd blob/LFS store, not inline git** (traces are MBs; git never forgets), and the `PROOF` cites a
+  hash/URL.
+- **Event re-entry is debounced.** A blocker clearing that flips N parked children to `ready` (e.g. an
+  expand→migrate→contract epic) coalesces into the next single Triage groom, not N simultaneous wakes;
+  re-entry wakes count against the per-cycle wake cap.
+- **All run-log readers are deterministic, on an explicit cadence.** Rollups, roster, scannable-row
+  precompute, queue metrics, and the **watchdog/reaper** are `jq`-class tooling — *zero* model wakes —
+  and the watchdog runs on a stated cadence (a continuously-running detector is a standing cost). The
+  roster renders from the last-written run record, not a fresh read.
+- **Attribution + ownership:** the run-log's `cost_tokens` feeds **Head of FinOps** + the dashboard; it
+  monitors spend and escalates. Cheapest-capable-model per task (optional per-persona model in the
+  manifest).
 
 These compound with the economy measures already in the model (report-by-exception, dedup, concision,
 fan-out discipline): those *reduce* spend; the guardrails *bound* it.
@@ -860,14 +873,23 @@ The human drives interactively; the system makes the PM funnel visible without h
 - **Optional scheduled ~9am scan (Phase 4):** runs the cockpit scan and notifies the human
   (channel TBD — push / iMessage / email).
 
-Three UX rules so it's legible, not a wall:
+UX rules so it's legible, not a wall:
+- **One front door.** The human must learn exactly *one* surface — the cockpit ("what's mine"); `/radar`
+  (what everyone's doing) and the roster (is the team OK) are **lenses reached from it**, not separate
+  commands to memorize. (Naming: the command holds *both* Decisions and Actions, so `/decisions` is a
+  mild label-lie — strong candidate to rename to `/inbox` or `/needs-you`. Flagged for your call.)
 - **Scannable rows.** Every item collapses to a one-line row — `[severity] · who's asking · the ask in
   ≤8 words · what it unblocks` — expand to the full package. Skim first, commit second.
-- **The zero state is designed.** Empty `/decisions` reads "All clear — N items moving on their own,
-  nothing needs you", not a blank list. The most common healthy state gets real craft.
-- **An at-rest roster** answers the calm-glance question "is the team OK right now?" — each persona with
-  its state (working / idle / blocked / asleep) + avatar + track record. The "feels like a team" promise
-  needs a place you can *see* them, not just a scrolling feed.
+- **The zero state is designed.** An empty cockpit reads "All clear — N items moving on their own,
+  nothing needs you · see the team [roster] · `/radar`", not a blank list. The most common healthy state
+  gets real craft, and the other lenses hang off it.
+- **An at-rest roster, weighted for the human's eye.** Collapse the system's liveness states to what the
+  human actually feels: most personas render quietly as **at rest** (idle + asleep merged — the
+  distinction is the system's, not yours), `working` gets a gentle active mark, and **`blocked` is the
+  only state with visual weight**. Each carries avatar + track record.
+- **Track record is a receipt, not a billboard.** Define it as one honest, verification-tied line —
+  "last 10 closes: 9 verified-and-held, 1 reopened" — never a vanity count ("47 closed"). The avatar
+  earns trust by what held, not by decoration.
 
 See "What reaches the human" for the completeness contract these queues enforce.
 
@@ -944,7 +966,10 @@ anytime (overridable per domain/severity — e.g. high visibility on security & 
 dev). Three knobs:
 - **Visibility:** *minimal* (only ripe mandatory decisions/actions; silence otherwise — the default) →
   *standard* (＋ a daily digest) → *high* (＋ `/radar` pushed, verification evidence and intermediate
-  proposals shown) → *observe-everything* (the live feed, every wake, full reasoning).
+  proposals shown) → *observe-everything* (the live feed, every wake, full reasoning). The loud settings
+  are framed as **temporary diagnostic modes** ("turn this on to build trust, then turn it down"), not a
+  lifestyle — the default is calm and the system gently expects a return to it, so anxiety doesn't lead
+  someone to the firehose and then blame the system for the flood they opened.
 - **Involvement:** the delegation-charter breadth — tight (escalate more, the human decides more) ↔
   loose (the agent decides more). Already a first-class, learning artifact.
 - **Cadence/channel:** push vs pull, daily scan on/off, notification thresholds.
@@ -998,9 +1023,10 @@ applied) and only then flips the parked action to `ready`. The human is never th
 proof, applied gently to human work too. Outstanding decisions and actions **persist** in the cockpit
 (and the daily scan); they never evaporate as chat afterthoughts.
 
-Every step has a **failure path** — "didn't work? → re-open with what you saw", routing straight back
-to the PM funnel. A human who isn't deep in the repo is never stranded on a failed step (the happy path
-isn't the only path).
+Every step has a **failure path** routing straight back to the PM funnel — and it's a **captured** path,
+not a composed one: the re-open **pre-fills** the failed step, the exact command run, and any visible
+output, so a frustrated, out-of-context human **confirms** rather than writes prose (reusing the
+copyable-command discipline). A human who isn't deep in the repo is never stranded on a failed step.
 
 ## Plugin architecture
 
