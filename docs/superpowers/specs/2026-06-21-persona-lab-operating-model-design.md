@@ -697,6 +697,37 @@ passes **all three gates**:
 with status. Ambient awareness ("what's everyone doing", future maybe-decisions) is a *separate,
 explicitly-requested* view (`/radar`), never mixed into Decisions/Actions.
 
+### Verify to the ground before escalating
+The deepest cause of a flooded human queue is **trusting, not verifying**: escalation is used as the
+cheap default for any uncertainty, instead of verification being the default. A claim ("I need key X"),
+a feasibility question ("can I add this env var?"), or a setting change gets passed up *unchecked*, so
+the human is handed an unverified assertion — really a research task in disguise — and, unable to
+adjudicate it either, defaults to "escalate" with nowhere left to go.
+
+**Rule: escalation is the last resort, after verification — never the default for uncertainty.** Before
+any persona proposes `blocked-by:*` or the PM marks `needs-human`, the uncertainty must first be
+resolved against **ground truth**, in order of robustness (the verification hierarchy, applied to
+*claims*, not just to "is it done"):
+- **the code** — is this actually needed/referenced? already present? what breaks without it?
+- **the live platform / API** — can it be done programmatically? is it already set? what are the real
+  permissions?
+- **the official docs** — what's the actual capability/procedure?
+
+Only the **irreducible human core** — a genuine judgment call or a genuinely human-only action —
+survives, and it arrives **with its verification evidence** ("checked the code: `X` referenced at
+`auth/session.ts:42`, not set; checked the platform: settable via `gh secret set`, which I can't do
+because it's a secret; docs: …; the one thing that's yours: the value"). The human sees grounded facts,
+never a bare claim.
+
+- **Claims between personas are verified, not trusted** — "trust the proof, not the persona" applies
+  *inside* the fleet, not just to external content. The Developer's "I need X" is a claim the Lead
+  Engineer's review / PM audit checks against the code before it's actioned or escalated.
+- **Many apparent "human actions" dissolve on verification** — the agent *can* do them (and the
+  delegation charter can grow to let it), leaving only the truly human-only residue (secrets, vendor
+  consoles, money).
+- **The PM is the verification gate, not just the framing gate** — it bounces an under-verified
+  escalation back ("verify it's actually needed first") exactly as it bounces an incomplete one.
+
 ### Decisions and actions are different work — split them
 - **`decision`** — a judgment only the human can make. The human *chooses*; renders under **Decisions
   waiting**.
