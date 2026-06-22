@@ -72,7 +72,7 @@ platform-only. Inventing a junior just for symmetry is the costume-role anti-pat
 | Build | — (no platform twin) | **Developer / writer** | repo-only |
 | Engineering review | **Lead Engineer** (code review, eng standards) | none — reviews each repo's PRs as a reader | platform-only |
 | Ontology | **Data Architect** (the one shared ontology) | none — Product Analyst drift-audits local conformance | platform-only |
-| Cost | **Cost Watch** (account-level billing) | (local resource-growth check) | platform-leaning |
+| Cost | **Head of FinOps** (account-level billing) | (local resource-growth check) | platform-leaning |
 | Leak scan | (policy under Security) | **Leak Scanner** (scans this repo) | repo-leaning |
 
 ### Responsibility split by rank
@@ -374,7 +374,7 @@ The "build the failure path first-class" layer; shares the watchdog/reaper with 
   finishes, the human is alerted. A hard ceiling; raising it is a **human decision** (money).
 - **Runaway-loop backstops:** caps on wakes/cycle, retries/action (the breaker), agents/cycle (the
   fan-out cap).
-- **Attribution + ownership:** the run-log's `cost_tokens` feeds Cost Watch + the dashboard; Cost
+- **Attribution + ownership:** the run-log's `cost_tokens` feeds Head of FinOps + the dashboard; Cost
   Watch monitors spend and escalates. Cheapest-capable-model per task (optional per-persona model in
   the manifest).
 
@@ -464,7 +464,7 @@ engagement:
   data-architect:     { all: owns(data-model), reads: all }
   head-of-design:     { all: sets-standard }
   head-of-security:   { all: owns(policy+registrar) }
-  cost-watch:         { all: owns(billing) }
+  head-of-finops:     { all: owns(billing) }
   lead-engineer:      { all: owns(eng-standards), audits: all }
   developer:          { per-repo: writer }
   product-analyst:    { per-repo: owns(local queue) }
@@ -550,7 +550,7 @@ The tone spec carried in each briefing:
 | **Head of Security** | blunt, risk-first, severe | the one who says "rotate it now," not "consider rotating" |
 | **Security Analyst** | careful, methodical, thorough | runs the checklist; escalates the severity call |
 | **Leak Scanner** | factual, mechanical, evidence-only | a detector — location + match, no opinions |
-| **Cost Watch** | dry, numbers-first, deadpan | an accountant who speaks in deltas and dollars |
+| **Head of FinOps** | dry, numbers-first, deadpan | an accountant who speaks in deltas and dollars |
 
 Paired ranks share a discipline's tone; the senior is more declarative and strategic, the
 analyst more operational. The **human's** own voice is the deliberate contrast: plain, brief,

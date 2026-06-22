@@ -24,7 +24,7 @@ any time — these are proposed defaults.
 | Data Architect | Raj |
 | Head of Security | Mike |
 | Head of Design | Laura |
-| Cost Watch | Dave |
+| Head of FinOps | Dave |
 
 ## Repo-tier pools (15 each)
 
