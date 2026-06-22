@@ -369,20 +369,29 @@ badly). It governs the right to **integrate to the repo's main line — one writ
 
 - **Serialize at dispatch (primary).** The orchestrator never launches a second Developer for a repo
   that already has one. Controlled dispatch is the lock most of the time.
-- **Atomic claim via a git lock-ref (the real CAS — backstop).** Claiming pushes
-  `refs/persona/lock/<repo>` carrying `{holder, claimed_at, ttl}`; GitHub rejects a second create, so
-  exactly one writer wins — server-side atomic, no extra service. Release deletes the ref on yield. This
-  is the compare-and-set GitHub Issues lacks (a read-then-write "record" would race). Catches anything
-  invoked outside the orchestrator.
-- **Lazily-evaluated lease — no daemon (Phase 1).** No heartbeat process: a would-be claimant that finds
-  the ref present but **expired** (`now > claimed_at + ttl`) runs stale-recovery and force-reclaims.
-  Reclamation happens when someone next wants the lock, not on a timer — so it works without the Phase-4
-  orchestrator. (Phase 4 adds active heartbeat + a reaper sweep for faster recovery.)
+- **Atomic claim via create-only CAS (backstop). No force, ever.** Claiming **creates** a lock marker
+  `refs/persona/lock/<repo>` → a tiny lock object `{holder, claimed_at}`; GitHub rejects a second
+  *create*, so exactly one writer wins — server-side atomic, no service. The **only two operations on
+  the ref are create and delete** — never a non-fast-forward update, never `--force`, never a history
+  rewrite. Release deletes the ref. The `refs/persona/*` namespace is **bot-write-only** (ref
+  protection), so nothing outside the system can create or remove it. This is the compare-and-set
+  Issues lacks (a read-then-write "record" would race).
+- **Liveness by progress, not wall-clock — and never auto-steal.** The marker carries **no
+  writer-supplied TTL** (a forgeable TTL was the hole). A claimant that finds the lock held checks the
+  holder's liveness via the **run-log** (an active run record still advancing through
+  commit-checkpoints). A *provably* dead holder (orphaned run record, no checkpoint progress past a
+  system-constant threshold) is recovered; **when liveness is ambiguous it escalates** ("lock held by a
+  possibly-stalled Developer — recover?") rather than stealing. No competitor ever overrides a live
+  holder. Works daemonless in Phase 1 (checked on demand when someone wants the lock); Phase 4 adds an
+  active progress-heartbeat + a reaper sweep for faster recovery.
 - **Readers are lock-free.** Auditors read **committed state (HEAD)**, never the writer's in-progress
   worktree — so audits are consistent and run freely alongside a write.
-- **Stale recovery on reclaim (shared with failure handling).** Before force-updating an expired ref:
-  assess the abandoned worktree, roll back to the last clean checkpoint (commit-checkpoint pattern), file
-  an interrupted-work issue, then reclaim. No permanent deadlock.
+- **Stale recovery = delete-then-create, not force (shared with failure handling).** Once a holder is
+  confirmed dead (or the human approves recovery): assess the abandoned worktree, roll back to the last
+  clean checkpoint (commit-checkpoint pattern), file an interrupted-work issue, **delete** the stale
+  marker, then **create** a fresh one. Deleting a *marker* ref destroys no work (the work lives in the
+  worktree/feature branch) — it is not a force-push. Concurrent recoverers race only on the atomic
+  create; the loser re-orients.
 - **Human preempt — "take the wheel."** Default is the human directs the Developer. But the human may
   explicitly take the writer lock: dispatched Developers for that repo pause, the active one
   checkpoints and yields, the human edits, and the human's commits flow back as state the personas
@@ -472,6 +481,38 @@ provenance bounds what content can manipulate it.
 
 Confinement + provenance compose: even content that slips the provenance gate hits a persona that
 structurally can't do harm.
+
+### Hardening, rooted in actual risk (round-2)
+Threat model = a single human's own repos, possibly public, where external contributors can *file
+issues/PRs but not push refs or change settings*. Fixes are sized to that — bound blast radius, treat
+content as data, guard the real boundaries; no theater.
+
+- **Extracted fields are inert, not just un-copied.** The structural re-file also treats each extracted
+  field as **data, never an instruction**: length-capped, rendered as inert literals (never executed),
+  and path/identifier fields validated (no traversal, no URLs). Not copying the body isn't enough if a
+  `repro` field is then run.
+- **Verification artifacts can carry secrets — scrub before they land.** Screenshots/traces leak tokens
+  (URLs, `Authorization` headers, cookies). E2E runs against a **scrubbed fixture session, never real
+  creds**; traces are stripped of auth headers/cookies; artifacts are **never attached to a public-repo
+  issue unscanned**. The git secret-scanner doesn't read images/traces — this is a separate gate.
+- **The manifest is the access boundary — guard it like one.** Editing `engagement:` *is* a privilege
+  change, so it's a **human-only action** (in the withheld set) gated by CODEOWNERS + Head-of-Security
+  review, never a routine Developer PR; the manifest→whitelist assertion runs **every dispatch** (not
+  just bootstrap), and any capability *widening* in a manifest diff is itself flagged as a `finding`.
+- **Bound a compromised dispatched writer (honest residual).** An injected Developer with `Bash` can do
+  anything a shell can *within its worktree + scoped token* — we don't pretend otherwise, we **bound
+  it**: dispatched writers run **egress-restricted** (network allowlist = the bus/GitHub only — the
+  control that actually stops exfil), the scoped token is **not readable by the shell** (credential
+  helper, short-lived), and the human-only withheld set keeps money/outward/irreversible actions off the
+  table. Worktree-scoped ACE is the accepted, *sized* residual, not an unbounded one.
+- **Local feed + displayed untrusted content.** The run-log feed/SSE binds to **loopback + a per-instance
+  token** (the real risk is other local processes/projects, not the internet). `/radar` and the live
+  feed **render untrusted / `origin:external` content with a visible marker and inert** — never as
+  actionable instructions; the human is the trust root, so reaching their eyes is the highest-value
+  injection.
+- **Lower-risk, noted not over-built:** ref "squatting" needs push access external contributors don't
+  have (refs are bot-write-only regardless); cryptographic signing stays deferred (GitHub's
+  authenticated author + edit history suffice for this threat model).
 
 ## Cross-repo coordinated change
 
