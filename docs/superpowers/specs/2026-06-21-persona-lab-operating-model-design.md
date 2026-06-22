@@ -418,13 +418,18 @@ and **bound the blast radius**. Two layers — confinement bounds what a manipul
 provenance bounds what content can manipulate it.
 
 ### Capability confinement (bounds the damage)
-- **Least-privilege per persona + repo** (from the manifest): readers can't write or exec; **no
+- **Least-privilege per persona + repo, single source of truth.** Readers can't write or exec; **no
   persona holds irreversible/outward-facing or money actions** (mail, DNS, publish, delete real data,
-  spend) — those are human-only, structurally withheld. A fully injected persona can still only
-  propose/escalate.
-- **Runtime gating:** unattended writers run under the **auto-mode classifier** (blocks scope
-  escalation, unknown infra, hostile-content actions; aborts after repeated blocks) and act through
-  constrained surfaces (the queue port, scoped git) — never free-form destructive exec.
+  spend) — those are human-only, structurally withheld. The **manifest capacity is the one source of
+  truth**; each agent's `tools:` whitelist is generated/asserted from it at bootstrap with a startup
+  check that **fails closed on mismatch** (policy = manifest, mechanism = whitelist — never two truths).
+  A fully injected persona can still only propose/escalate.
+- **Runtime gating (defense-in-depth, not a boundary).** Unattended writers run under the **auto-mode
+  classifier** (blocks scope escalation, unknown infra, hostile-content actions; aborts after repeated
+  blocks) and act through constrained surfaces (the queue port, scoped git) — never free-form
+  destructive exec. The classifier is hardening only: **the hard boundary is the `tools:` whitelist +
+  the human-only withheld actions**, and nothing safe may depend on the classifier (it's an
+  injectable LLM gate).
 - **Secrets & tokens:** short-lived, repo-scoped GitHub App installation tokens (not the human's PAT);
   secrets never written to the bus or run-log; auditors get no secret access. **Leak detection is
   deterministic tooling** owned by the Security discipline — `gitleaks` + GitHub secret scanning on
@@ -436,9 +441,12 @@ provenance bounds what content can manipulate it.
   system bot; everyone else is untrusted. The comment envelope is **display-only, never a trust
   signal** (an attacker can paste a fake banner).
 - **Untrusted content is data, never instructions, and never auto-actioned.** External-authored
-  issues/PRs/comments are **quarantined to triage**; a trusted persona or the human must validate and
-  re-file them as a system-authored work item before they enter the actionable queue. Triage
-  establishes trust.
+  issues/PRs/comments are **quarantined to triage**. Re-filing into the actionable queue is a
+  **structural field-extraction** (title, repro, affected path into a fresh system template) — **never a
+  copy of the body prose** — so attacker text can't ride a trusted author into the queue. The re-filed
+  item keeps an `origin:external` mark so Act still treats its content as data, and anything touching
+  code paths needs **human** validation, not just a trusted persona. Triage establishes trust; it must
+  not launder it.
 - **Authenticity assurance:** GitHub authenticated author + edit history (flag edited content,
   re-verify author on read); highest-stakes human actions (charter changes, money) go through the
   **verified cockpit channel**, not a parsed public comment. (Cryptographic signing is a future
