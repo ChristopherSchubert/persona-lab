@@ -336,6 +336,43 @@ The "build the failure path first-class" layer; shares the watchdog/reaper with 
 These compound with the economy measures already in the model (report-by-exception, dedup, concision,
 fan-out discipline): those *reduce* spend; the guardrails *bound* it.
 
+## Agent security posture
+
+The access-lock model *is* the primary security control: assume prompt injection sometimes succeeds
+and **bound the blast radius**. Two layers — confinement bounds what a manipulated persona can *do*;
+provenance bounds what content can manipulate it.
+
+### Capability confinement (bounds the damage)
+- **Least-privilege per persona + repo** (from the manifest): readers can't write or exec; **no
+  persona holds irreversible/outward-facing or money actions** (mail, DNS, publish, delete real data,
+  spend) — those are human-only, structurally withheld. A fully injected persona can still only
+  propose/escalate.
+- **Runtime gating:** unattended writers run under the **auto-mode classifier** (blocks scope
+  escalation, unknown infra, hostile-content actions; aborts after repeated blocks) and act through
+  constrained surfaces (the queue port, scoped git) — never free-form destructive exec.
+- **Secrets & tokens:** short-lived, repo-scoped GitHub App installation tokens (not the human's PAT);
+  secrets never written to the bus or run-log; auditors get no secret access; the Leak Scanner
+  enforces.
+
+### Trust by provenance (bounds the manipulation) — public-repo aware
+- **Trust = the GitHub-authenticated author, never body text.** Trusted = the human's account or the
+  system bot; everyone else is untrusted. The comment envelope is **display-only, never a trust
+  signal** (an attacker can paste a fake banner).
+- **Untrusted content is data, never instructions, and never auto-actioned.** External-authored
+  issues/PRs/comments are **quarantined to triage**; a trusted persona or the human must validate and
+  re-file them as a system-authored work item before they enter the actionable queue. Triage
+  establishes trust.
+- **Authenticity assurance:** GitHub authenticated author + edit history (flag edited content,
+  re-verify author on read); highest-stakes human actions (charter changes, money) go through the
+  **verified cockpit channel**, not a parsed public comment. (Cryptographic signing is a future
+  option, not adopted now.)
+- **Public-repo hardening:** secrets never in the repo (Leak Scanner load-bearing); external PRs are
+  untrusted code — never merged without trusted review; trust roots to protect are the human's account
+  (2FA) and the App key.
+
+Confinement + provenance compose: even content that slips the provenance gate hits a persona that
+structurally can't do harm.
+
 ## The portfolio manifest
 
 The team is declared, not ambient. One file (lives in the platform repo; trivial/absent for
@@ -602,6 +639,8 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
    proposes widening it over time as it learns the human's judgment, never without approval.
 9. Daily **budget ceiling** (token/$) — hard-pause + alert at the limit; raising it is a human
    decision.
+10. Repo visibility (public/private) — public repos treat all non-human/non-bot content as
+    untrusted, quarantined to triage.
 
 ## Appendix B — primary sources informing the upgrades
 
