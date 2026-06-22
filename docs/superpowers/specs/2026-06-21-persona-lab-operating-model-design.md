@@ -212,7 +212,10 @@ cadence, in a pipeline ordered by dependency — **Sense → Triage → Act → 
 
 Bright line, no double-claim: **scope-of-diff is the Lead Engineer's; acceptance-of-outcome is the
 PM's.** Both must record a pass before an item may reach `done` (same required-field validation as
-`needs-human`). A bounce from either flips the item back to **`ready`** carrying a `changes-requested`
+`needs-human`). **Each gate record cites the commit SHA it evaluated, and `done` requires both passes to
+cite the *same* current HEAD** — a push that advances HEAD past an `approved` `REVIEW` invalidates it and
+re-triggers the Lead Engineer gate (no smuggling follow-on commits past review under a continuous-loop
+writer). A bounce from either flips the item back to **`ready`** carrying a `changes-requested`
 record — it re-enters the Act queue and the writer lock is re-claimed through the normal path (no
 review-special lock handling). Scope/size are adjudicated against numbers, not opinion: a **`diff_budget`
 {max_lines, max_files} in the verification manifest**, and **checkable acceptance bullets as a required
@@ -395,22 +398,30 @@ badly). It governs the right to **integrate to the repo's main line — one writ
   that already has one. Controlled dispatch is the lock most of the time.
 - **Atomic claim via create-only CAS (backstop). No force, ever.** Claiming **creates** a lock marker
   as a **protectable branch** `persona-lock/<repo>` (a real `refs/heads/*` ref, so GitHub rulesets *can*
-  guard it — see below) pointing to a tiny lock object `{holder, claimed_at, fence}`. The API is
-  create-only: `POST git/refs` returns **422 "Reference already exists"** to the second racer, so exactly
-  one writer wins — server-side atomic, no service. The **only two operations are create and delete** —
-  never `PATCH`/update, never `--force`, never a history rewrite. Release deletes the ref. A ruleset on
-  `persona-lock/*` (restrict creation/deletion/update + non-fast-forward, bypass = the bot only) makes
-  this server-enforced — *correcting an earlier error: `refs/persona/*` custom namespaces can't be
-  protected; branches can.* This is the compare-and-set Issues lacks.
+  guard it — see below) pointing to a **commit** whose committed `lock.json` carries
+  `{holder, claimed_at, fence}` (a branch ref must point to a commit, not a blob; `fence` = that commit's
+  SHA, and with the ruleset below the commit is immutable for the lock's life, so the fence is
+  tamper-proof by construction; `claimed_at` = the lock commit's authored time, never a claimant clock).
+  The API is create-only: `POST git/refs` returns **422 "Reference already exists"** to the second racer,
+  so exactly one writer wins — server-side atomic, no service. The **only two operations are create and
+  delete** — never `PATCH`/update, never `--force`, never a history rewrite (the lock branch is
+  write-once). Release deletes the ref. A ruleset on `persona-lock/*` (restrict creation/deletion/update
+  + non-fast-forward, bypass = the bot only) makes this server-enforced — *correcting an earlier error:
+  `refs/persona/*` custom namespaces can't be protected; branches can.* The namespace is reserved
+  tooling-only (excluded from branch-cleanup/CODEOWNERS/CI — `branches-ignore: persona-lock/**`). This is
+  the compare-and-set Issues lacks.
 - **Fencing token — the holder's belief is verified, not trusted.** The lock object carries a **fence**
-  (its creating-commit SHA / a monotonic counter). Before *every* integrate-to-main-line push, a writer
-  **re-reads the lock and asserts its fence still matches**; a writer whose fence no longer matches
-  **aborts and checkpoints** instead of pushing. This is what makes "never auto-steal" *safe* rather than
-  merely polite: even if liveness is misjudged and the lock is reclaimed under a still-running writer,
-  the stale writer can't corrupt main — its next push is fenced out.
+  (its creating-commit SHA). Before *every* integrate-to-main-line push, a writer does a **fresh
+  server-side re-read** of the lock and asserts its fence still matches (a cached read defeats it); a
+  writer whose fence no longer matches **aborts and checkpoints** instead of pushing. This is what makes
+  "never auto-steal" *safe* rather than merely polite — and it's also what keeps Phase 1 safe **before the
+  Phase-4 bot exists**: the ruleset's `bypass = bot` enforcement is latent until then, so in Phase 1
+  (single human identity) the lock rests on serialize-at-dispatch + the fencing-token abort, with
+  server-side ruleset enforcement activated when the App lands.
 - **Liveness by progress + a claim-grace window — never a forgeable TTL.** The marker has **no
   writer-supplied TTL**. The winner writes its **first checkpoint immediately after winning the create**
-  (before orient), bounding the alive-but-silent window. A claimant finding the lock held judges the
+  (before orient) — to the **run-log / feature branch, not the write-once lock branch** — bounding the
+  alive-but-silent window. A claimant finding the lock held judges the
   holder live if **checkpoint-progressing OR within a system-constant `grace` of `claimed_at`**; only a
   holder past grace *and* showing no progress is "provably dead." Ambiguous → **escalate, never steal**.
   Daemonless in Phase 1 (checked on demand); Phase 4 adds an active progress-heartbeat + reaper.
@@ -444,6 +455,9 @@ The "build the failure path first-class" layer; shares the watchdog/reaper with 
   partial work is discarded or salvaged into an issue.
 - **Stalled cycle:** a stage not advancing within a timeout → the watchdog aborts/restarts, logs,
   surfaces if persistent.
+- **Wedged funnel position:** an item sitting in a funnel position past `grace` with no owning-tier wake
+  (a failed/starved Analyst or PM wake) → the watchdog re-dispatches the owner, escalates if persistent.
+  Same `jq`-class scan as orphaned-wakes — visibility (the dashboard shows the position) isn't recovery.
 - **Circuit breaker:** an action failing N times is parked (`blocked-by:clarification` or escalated)
   *with its failure history* — never retried forever, so a poison item can't loop the fleet.
 
@@ -770,6 +784,17 @@ to `reads` / `audits`.
 - The manifest and the wake-context use this one enum: a persona's trigger set is drawn from
   { summon, on-demand, scheduled, event:<name> } (summon being the mode-as-trigger shorthand).
 
+### Handoff-package schemas (one home)
+The deterministic required-field check is now load-bearing at three gates (recursed triage hand-up,
+`needs-human` admission, `human-attested`) — plus `REVIEW`, wake-context, and run-record shapes. Their
+required-field schemas are declared **once** as a versioned schema set generated from the plugin into the
+instance config (`.claude/persona-lab/schemas`); the cockpit validator, the recursed-triage gate, and
+each emitting persona **assert against that one set** (policy = one source, mechanism asserts it — same
+pattern as manifest→whitelist). Format (YAML/JSON) is the only deferred part.
+
+The **review-verdict** enum (`approved · changes-requested · bounce:out-of-scope`) and the **roster
+liveness** labels (`working · at-rest · blocked`) are registered here too, so no sub-enum is orphaned.
+
 ## The issue bus discipline
 
 - **Comments are typed, discrete state records — not conversation.** Vocabulary:
@@ -816,7 +841,8 @@ Ben · finances Team · Developer · dispatched · 2026-06-21 · briefing ↗
 
 **Decision:** the bus is **GitHub Issues** as the store, behind a **queue port** (storage:
 file / comment / label / close / query, **plus** provenance: `author_identity` / `trust_class`, and
-capacity: rate/quota signals). Honest scope of the seam: **the storage is swappable; the model is
+capacity: a `may_write(): {ok | retry_after}` *decision*, not raw rate/quota headers — the substrate's
+limits are normalized behind it so callers never learn GitHub's dialect). Honest scope of the seam: **the storage is swappable; the model is
 GitHub-coupled at the trust layer** (authenticated author) **and the cockpit layer** (Projects) — those
 are real re-work if you switch, not free. So "swap the substrate cheaply" means the *store*, not trust
 or cockpit. A
@@ -895,7 +921,8 @@ UX rules so it's legible, not a wall:
 - **An at-rest roster, weighted for the human's eye.** Collapse the system's liveness states to what the
   human actually feels: most personas render quietly as **at rest** (idle + asleep merged — the
   distinction is the system's, not yours), `working` gets a gentle active mark, and **`blocked` is the
-  only state with visual weight**. Each carries avatar + track record.
+  only state with visual weight** (`parked` is the canonical token; "working"/"at rest" are the roster's
+  own liveness labels, distinct from work-item status). Each carries avatar + track record.
 - **Track record is a receipt, not a billboard.** Define it as one honest, verification-tied line —
   "last 10 closes: 9 verified-and-held, 1 reopened" — never a vanity count ("47 closed"). The avatar
   earns trust by what held, not by decoration.
