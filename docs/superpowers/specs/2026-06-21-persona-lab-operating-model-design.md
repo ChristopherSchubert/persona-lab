@@ -359,15 +359,20 @@ badly). It governs the right to **integrate to the repo's main line — one writ
 
 - **Serialize at dispatch (primary).** The orchestrator never launches a second Developer for a repo
   that already has one. Controlled dispatch is the lock most of the time.
-- **Lease-based lock marker (backstop).** A durable per-repo record `{holder, worktree/branch,
-  heartbeat, lease-TTL}`, claimed on orient and renewed by heartbeat — the source of truth (personas
-  are stateless). Catches anything invoked outside the orchestrator.
+- **Atomic claim via a git lock-ref (the real CAS — backstop).** Claiming pushes
+  `refs/persona/lock/<repo>` carrying `{holder, claimed_at, ttl}`; GitHub rejects a second create, so
+  exactly one writer wins — server-side atomic, no extra service. Release deletes the ref on yield. This
+  is the compare-and-set GitHub Issues lacks (a read-then-write "record" would race). Catches anything
+  invoked outside the orchestrator.
+- **Lazily-evaluated lease — no daemon (Phase 1).** No heartbeat process: a would-be claimant that finds
+  the ref present but **expired** (`now > claimed_at + ttl`) runs stale-recovery and force-reclaims.
+  Reclamation happens when someone next wants the lock, not on a timer — so it works without the Phase-4
+  orchestrator. (Phase 4 adds active heartbeat + a reaper sweep for faster recovery.)
 - **Readers are lock-free.** Auditors read **committed state (HEAD)**, never the writer's in-progress
   worktree — so audits are consistent and run freely alongside a write.
-- **Stale-lock recovery (shared with failure handling).** Lease expiry + dead heartbeat → a
-  watchdog/reaper reclaims the lock: assess the abandoned worktree, roll back to the last clean
-  checkpoint (commit-checkpoint pattern), file an issue about the interrupted work, release. No
-  permanent deadlock.
+- **Stale recovery on reclaim (shared with failure handling).** Before force-updating an expired ref:
+  assess the abandoned worktree, roll back to the last clean checkpoint (commit-checkpoint pattern), file
+  an interrupted-work issue, then reclaim. No permanent deadlock.
 - **Human preempt — "take the wheel."** Default is the human directs the Developer. But the human may
   explicitly take the writer lock: dispatched Developers for that repo pause, the active one
   checkpoints and yields, the human edits, and the human's commits flow back as state the personas
@@ -681,16 +686,20 @@ Ben · finances Team · Developer · dispatched · 2026-06-21 · briefing ↗
 
 ### Substrate, governance & the cockpit
 
-**Decision:** the bus is **GitHub Issues** as the store, behind a **queue port** (file /
-comment / label / close / query) so the substrate is swappable without touching the model. A
+**Decision:** the bus is **GitHub Issues** as the store, behind a **queue port** (storage:
+file / comment / label / close / query, **plus** provenance: `author_identity` / `trust_class`, and
+capacity: rate/quota signals). Honest scope of the seam: **the storage is swappable; the model is
+GitHub-coupled at the trust layer** (authenticated author) **and the cockpit layer** (Projects) — those
+are real re-work if you switch, not free. So "swap the substrate cheaply" means the *store*, not trust
+or cockpit. A
 **GitHub Projects v2 board is the cross-repo cockpit from day one**, curated by the platform
 PM (the board is the PM's roadmap made visible). Evaluated against Linear (4/5) and a
 Supabase/Postgres queue (4/5); Issues (4/5) won on cost (free), native git/PR co-location,
 best off-the-shelf agent tooling (official MCP + `gh`), and audit semantics — and its two
 weaknesses (no upsert; a ~500 content-writes/hour secondary cap) are exactly what the
 governance below neutralizes. Supabase becomes the right answer only if idempotent dedup +
-cross-repo analytics become core and owning a control plane is acceptable — cheap to switch
-to later, via the port.
+cross-repo analytics become core and owning a control plane is acceptable — the *store* is cheap to
+switch via the port later (trust + cockpit would be re-worked regardless).
 
 **Volume governance — this is what keeps the bus from becoming a nightmare:**
 
