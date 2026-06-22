@@ -11,8 +11,8 @@ any time — these are proposed defaults.
 - Each pool is **gender-diverse**.
 - **No name is reused across personas** (a name belongs to exactly one persona's pool).
 - Names are **plain, clearly human, phonetically distinct** — and **flavored to the role**
-  (engineers plain/classic, product more modern, security serious, design stylish, leak-scanner
-  utilitarian). All real first names, none fanciful.
+  (engineers plain/classic, product more modern, security serious, design stylish). All real
+  first names, none fanciful.
 
 ## Platform personas (singletons)
 
@@ -40,5 +40,3 @@ Max · Vince · Roman · Ivan · Yusuf · Cole · Reza · Hana · Nadia · Vera 
 ### Design Analyst — stylish, creative (still real names)
 Esmé · Juno · Lola · Mira · Anouk · Stella · Margot · Luca · Remy · Felix · Jasper · Elio · Otis · Beau · Sasha
 
-### Leak Scanner — plain, utilitarian, workmanlike
-Stan · Norm · Gus · Hank · Earl · Roy · Walt · Pam · Bev · Gail · Marge · Donna · Ruth · Edna · Pat

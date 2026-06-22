@@ -73,7 +73,6 @@ platform-only. Inventing a junior just for symmetry is the costume-role anti-pat
 | Engineering review | **Lead Engineer** (code review, eng standards) | none — reviews each repo's PRs as a reader | platform-only |
 | Ontology | **Data Architect** (the one shared ontology) | none — Product Analyst drift-audits local conformance | platform-only |
 | Cost | **Head of FinOps** (account-level billing) | (local resource-growth check) | platform-leaning |
-| Leak scan | (policy under Security) | **Leak Scanner** (scans this repo) | repo-leaning |
 
 ### Responsibility split by rank
 
@@ -120,7 +119,7 @@ authority sits*; mode says *how it's invoked right now*. Any rank can run in eit
 | | Summoned (advises the human, live) | Dispatched (autonomous) |
 |---|---|---|
 | **Platform / senior** | Architect: "does this break a contract?"; PM frames a decision | portfolio policy audit; roadmap groom across repos |
-| **Repo / junior** | "Developer, how would you approach this?" | Developer implements an issue; Leak Scanner sweeps; Product Analyst grooms the local queue |
+| **Repo / junior** | "Developer, how would you approach this?" | Developer implements an issue; Security Analyst reviews; Product Analyst grooms the local queue |
 
 - **Natural gravity, not a rule:** seniors tend to be summoned (cross-app judgment wants the
   human in the loop), juniors tend to be dispatched (local legwork doesn't) — but both modes
@@ -219,7 +218,7 @@ runs in lockstep.
 **Triggering is a per-persona mix.** Each persona's manifest cadence picks its trigger from a
 small vocabulary — **summon-only · on-demand · scheduled · event** (event named) — so behavior
 is assembled per persona, not fixed globally. E.g. Developer = on-demand + event(issue labeled
-ready); Leak Scanner = scheduled(daily) + event(pre-commit); Architect = summon-only; PM =
+ready); Security Analyst = scheduled + event(pr.merged); Architect = summon-only; PM =
 scheduled(after sweeps) + on-demand. (Orchestration mechanism is built in Phase 4; this is the
 model it implements.)
 
@@ -396,8 +395,10 @@ provenance bounds what content can manipulate it.
   escalation, unknown infra, hostile-content actions; aborts after repeated blocks) and act through
   constrained surfaces (the queue port, scoped git) — never free-form destructive exec.
 - **Secrets & tokens:** short-lived, repo-scoped GitHub App installation tokens (not the human's PAT);
-  secrets never written to the bus or run-log; auditors get no secret access; the Leak Scanner
-  enforces.
+  secrets never written to the bus or run-log; auditors get no secret access. **Leak detection is
+  deterministic tooling** owned by the Security discipline — `gitleaks` + GitHub secret scanning on
+  pre-commit + a scheduled sweep; hits auto-file a `finding` the Security Analyst triages (the right
+  mechanism per "deterministic > LLM", and no wasted persona wakes).
 
 ### Trust by provenance (bounds the manipulation) — public-repo aware
 - **Trust = the GitHub-authenticated author, never body text.** Trusted = the human's account or the
@@ -411,7 +412,7 @@ provenance bounds what content can manipulate it.
   re-verify author on read); highest-stakes human actions (charter changes, money) go through the
   **verified cockpit channel**, not a parsed public comment. (Cryptographic signing is a future
   option, not adopted now.)
-- **Public-repo hardening:** secrets never in the repo (Leak Scanner load-bearing); external PRs are
+- **Public-repo hardening:** secrets never in the repo (deterministic leak scanning load-bearing); external PRs are
   untrusted code — never merged without trusted review; trust roots to protect are the human's account
   (2FA) and the App key.
 
@@ -468,7 +469,7 @@ engagement:
   lead-engineer:      { all: owns(eng-standards), audits: all }
   developer:          { per-repo: writer }
   product-analyst:    { per-repo: owns(local queue) }
-  leak-scanner:       { per-repo: audits }
+  security-analyst:   { per-repo: audits }   # incl. deterministic leak scanning
 ```
 
 ## Shared disciplines (`_disciplines`, injected into every persona)
@@ -549,7 +550,6 @@ The tone spec carried in each briefing:
 | **Data Architect** | meticulous, precise, lightly pedantic | a librarian who insists one thing has exactly one name |
 | **Head of Security** | blunt, risk-first, severe | the one who says "rotate it now," not "consider rotating" |
 | **Security Analyst** | careful, methodical, thorough | runs the checklist; escalates the severity call |
-| **Leak Scanner** | factual, mechanical, evidence-only | a detector — location + match, no opinions |
 | **Head of FinOps** | dry, numbers-first, deadpan | an accountant who speaks in deltas and dollars |
 
 Paired ranks share a discipline's tone; the senior is more declarative and strategic, the
