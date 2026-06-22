@@ -373,6 +373,35 @@ provenance bounds what content can manipulate it.
 Confinement + provenance compose: even content that slips the provenance gate hits a persona that
 structurally can't do harm.
 
+## Cross-repo coordinated change
+
+The hard multi-agent case behind the `coordination` blocker. The principle: **don't coordinate
+writers in real time** (where agents are weak) — **decompose into a dependency-sequenced series of
+independently-safe, backward-compatible single-repo steps.** The pattern is **expand → migrate →
+contract** (parallel change):
+
+1. **Expand** — the producer adds the new shape alongside the old (backward-compatible). One safe
+   single-repo change.
+2. **Migrate** — each consumer moves to the new shape. Each safe and single-repo, any order.
+3. **Contract** — once all consumers have migrated, the producer removes the old shape. One safe
+   single-repo change, gated on the precondition.
+
+Mapped onto existing roles and the pipeline:
+- The **Platform Architect** designs it as an ADR + the expand/migrate/contract plan.
+- The **Platform PM** sequences it as an **epic with per-repo children**, each child a normal
+  single-repo action with `blocked-by:dependency` on its predecessor (contract blocked until all
+  migrates land). The non-blocking pipeline does the rest — each child flips to `ready` when its
+  dependency clears and is pulled by that repo's Developer under its own lock.
+- **No simultaneous multi-repo editing, no atomic multi-repo commit.** Every step is
+  backward-compatible, so the system is correct at every intermediate state and any step rolls back
+  independently.
+
+Verification at the seams: the contract step's acceptance quotes "all consumers migrated" (checkable
+via consumer-driven contract tests + the PM's drift audit). The epic lives at home base; children are
+cross-linked issues per repo; the Projects cockpit shows progress. The rare *genuinely* atomic change
+(can't be made backward-compatible) becomes a **human-authorized flag day** — escalated as a
+`decision` — but expand/contract is the strong default so that's rare.
+
 ## The portfolio manifest
 
 The team is declared, not ambient. One file (lives in the platform repo; trivial/absent for
