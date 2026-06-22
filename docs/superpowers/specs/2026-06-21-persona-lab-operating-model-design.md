@@ -288,6 +288,43 @@ fixed table.** The platform PM stewards it:
 So human decisions do double duty: they unblock the parked action *and* teach the boundary — and the
 boundary only ever loosens by the human's explicit consent.
 
+## Issue types & the Developer's mandate
+
+Governing rule: **the Developer satisfies the issue in front of it — it never grows it.** The failure
+mode this guards against is the slide from *diagnosing* a bug into *designing and building* a large fix.
+
+| Type | Developer's mandate |
+|---|---|
+| **bug — undiagnosed** | Diagnose only: find root cause, write it up, propose a *scoped* fix. May fix in place **only if** trivial, obvious, and within the issue's acceptance + size budget; otherwise stop and let the fix become its own authorized issue. |
+| **bug — diagnosed** | Implement the scoped fix to acceptance. |
+| **feature** | Implement to a *settled* plan/spec. |
+| **chore** | Just do it (mechanical, low-risk). |
+| **finding** | Not the Developer's — the PM triages it into a bug/feature/chore first. |
+| **decision / action** | Human-only (the cockpit types); never a Developer work item. |
+| **epic** | Never worked directly — only its children. |
+
+**Stop-and-pull-up trip-wires (any type).** The instant one trips, the Developer **stops, parks the
+issue, and pulls up** — it does not push through:
+
+1. **Design needed** — more than one viable approach with real tradeoffs, or a non-obvious structure →
+   pull up (Architect / Lead Engineer). *Investigating ≠ designing; the moment a fix needs design, the
+   Developer halts.*
+2. **Scope** — the change would exceed the issue's acceptance → propose the extra as a new issue.
+3. **Size** — exceeds the per-issue diff budget → decompose / re-scope as a feature or epic.
+4. **Contract** — touches a cross-app contract/schema/shared noun → Architect.
+5. **Surprise** — diagnosis reveals a different or bigger problem → file a new finding, don't absorb it.
+6. **Authority** — an owner-class/human call → escalate.
+
+Parking is non-blocking: the Developer files the design need as `blocked-by:decision` (or a new scoped
+issue) and moves to the next `ready` item. Implementation resumes only once an approach is chosen and
+re-enters as an authorized, scoped issue.
+
+**Enforced at three points, not hoped for:** the **Developer's briefing** encodes the mandate +
+trip-wires; the **Lead Engineer's code review** bounces any PR that exceeds its issue's scope or
+smuggles in an unreviewed design ("this is a design, not a fix — needs a plan"); the **PM's acceptance
+audit** confirms the close matches the issue's acceptance — no silent scope growth. This is the model's
+expression of Anthropic's "separate exploration from execution" and "single-feature scoping is critical".
+
 ## Concurrency & the writer lock
 
 With worktrees, editing doesn't collide — each Developer works in its own worktree/branch. The
