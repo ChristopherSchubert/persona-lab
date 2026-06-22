@@ -323,7 +323,25 @@ engagement:
    and *what comes next*. Cut filler — preamble, recaps, hedging — never substance. A finding
    so terse it's cryptic has failed just as badly as a wall of restated context.
 
-## Per-persona voice & tone
+## Per-persona identity, voice & tone
+
+**Each persona is a named individual** = name + role + tone + a one-line disposition. The name is a
+relationship handle; the **role still carries all authority and access, unchanged**. Platform
+personas are one named individual each (singletons); **repo personas are a distinct individual per
+repo** — your `finances` Developer ("Sam") is a different teammate from your `schubert-family`
+Developer ("Alex") — so you build relationships with specific people assigned to each app.
+
+- **Consistency is structural, not memory.** The character sheet (name/role/tone/disposition) ships
+  in the agent definition, so every stateless wake renders the same person. Continuity comes from
+  the durable record (their attributed issues/comments/decisions); on wake a persona may skim its
+  own run-log history to stay consistent with prior calls (cost-aware, optional).
+- **Naming is the human's.** Bootstrap proposes names; the human can set or rename any at any time —
+  cosmetic, never touches authority/access. Stored in the roster (manifest).
+- **Visual identity:** name + initial avatar + the persona colour, so the dashboard roster reads
+  like a team you manage, not a process list.
+- **The guardrail:** identity serves legibility and delight, never trust or cost. The AI-flag stays
+  (these are AI personas, not people); verification still rules — trust the proof, not the persona;
+  tone is word-choice, not word-count. Recognizable teammates, unchanged rigor.
 
 Each persona writes like a real person doing that job — distinct diction and framing — but
 **voice lives in word choice, never word count.** A persona in character is still terse. The
@@ -379,7 +397,7 @@ authoritative — no AI banner, decisions not discussion — kept scarce so it c
 ### Comment envelope (one header line + collapsed detail footer)
 
 ```markdown
-🤖 **Developer** · FINDING
+🤖 **Sam (Developer)** · FINDING
 
 Login rejects valid credentials when the user's device clock runs >30s ahead of the server.
 
@@ -392,11 +410,11 @@ regression test. Low blast radius. Implementing under this issue unless the arch
 a contract concern.
 
 <details><summary>AI persona — not the human</summary>
-Developer · dispatched · 2026-06-21 · briefing ↗
+Sam (Developer) · finances · dispatched · 2026-06-21 · briefing ↗
 </details>
 ```
 
-- **Header (one line):** AI flag + persona + record type.
+- **Header (one line):** AI flag + name (role) + record type.
 - **Body:** the concise record.
 - **Footer (collapsed `<details>`):** provenance — mode, date, briefing link — present but
   uncluttering. Briefing link resolves to the canonical plugin file; manifest may override.
@@ -519,7 +537,8 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
 3. Human: who is the escalation target?
 4. Bus: GitHub issues as the queue?
 5. Roster: which disciplines are in scope (default minimal: Product Analyst + Developer; add
-   architect/auditors only when chosen)?
+   architect/auditors only when chosen)? Propose a **name** for each (human can rename); repo
+   personas get a distinct name per repo.
 6. Per persona: trigger mix (summon-only / on-demand / scheduled / event — event named) +
    access lock.
 7. Tooling: worktrees on? auto mode for unattended Developer? claim a port range?
