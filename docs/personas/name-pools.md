@@ -40,3 +40,16 @@ Max · Vince · Roman · Ivan · Yusuf · Cole · Reza · Hana · Nadia · Vera 
 ### Design Analyst — stylish, creative (still real names)
 Esmé · Juno · Lola · Mira · Anouk · Stella · Margot · Luca · Remy · Felix · Jasper · Elio · Otis · Beau · Sasha
 
+## Avatars
+
+Each name has a **per-individual pixel-art avatar** at `assets/avatars/<name>.png` (lowercase, ASCII —
+Esmé → `esme.png`). One PNG per name (names are unique across the roster). Faces are flavored like the
+names (engineers plain, product modern, security serious, design stylish).
+
+- **PNG, not SVG** — GitHub renders PNG in issue comments; raw SVG won't display.
+- Square, pixel-art, ~64–128px native so it stays crisp at 16–20px.
+- Referenced by **absolute raw URL** in the comment-envelope header (beside the AI flag), the dashboard
+  roster, and the cockpit.
+- An avatar is a **receipt, not a mask** — show it next to the persona's track record (e.g. "41 closed,
+  0 reverted") so the face earns trust rather than just decorating.
+

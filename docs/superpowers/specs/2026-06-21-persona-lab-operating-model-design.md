@@ -510,8 +510,10 @@ Developer ("Alex") — so you build relationships with specific people assigned 
   one another so teammates are never confused. The 15-name pools per repo-tier persona
   (gender-diverse, role-flavored, no cross-persona reuse) live in `docs/personas/name-pools.md`;
   the bootstrap draws a distinct name per repo.
-- **Visual identity:** name + initial avatar + the persona colour, so the dashboard roster reads
-  like a team you manage, not a process list.
+- **Visual identity:** name + a **per-individual pixel-art avatar** (PNG, by name — see
+  `docs/personas/name-pools.md`) + the persona colour, in the comment-envelope header (beside the AI
+  flag), the dashboard roster, and the cockpit. The avatar is a *receipt, not a mask* — shown with the
+  persona's track record so it earns trust rather than just decorating.
 - **The guardrail:** identity serves legibility and delight, never trust or cost. The AI-flag stays
   (these are AI personas, not people); verification still rules — trust the proof, not the persona;
   tone is word-choice, not word-count. Recognizable teammates, unchanged rigor.
