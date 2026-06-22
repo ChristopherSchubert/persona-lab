@@ -280,6 +280,32 @@ fixed table.** The platform PM stewards it:
 So human decisions do double duty: they unblock the parked action *and* teach the boundary — and the
 boundary only ever loosens by the human's explicit consent.
 
+## Concurrency & the writer lock
+
+With worktrees, editing doesn't collide — each Developer works in its own worktree/branch. The
+writer lock isn't preventing file-stomping; it's a **deliberate serialization for coherence** (two
+Developers loose in one repo → merge/semantic conflicts, duplicated work; and coding parallelizes
+badly). It governs the right to **integrate to the repo's main line — one writer per repo at a time**.
+
+- **Serialize at dispatch (primary).** The orchestrator never launches a second Developer for a repo
+  that already has one. Controlled dispatch is the lock most of the time.
+- **Lease-based lock marker (backstop).** A durable per-repo record `{holder, worktree/branch,
+  heartbeat, lease-TTL}`, claimed on orient and renewed by heartbeat — the source of truth (personas
+  are stateless). Catches anything invoked outside the orchestrator.
+- **Readers are lock-free.** Auditors read **committed state (HEAD)**, never the writer's in-progress
+  worktree — so audits are consistent and run freely alongside a write.
+- **Stale-lock recovery (shared with failure handling).** Lease expiry + dead heartbeat → a
+  watchdog/reaper reclaims the lock: assess the abandoned worktree, roll back to the last clean
+  checkpoint (commit-checkpoint pattern), file an issue about the interrupted work, release. No
+  permanent deadlock.
+- **Human preempt — "take the wheel."** Default is the human directs the Developer. But the human may
+  explicitly take the writer lock: dispatched Developers for that repo pause, the active one
+  checkpoints and yields, the human edits, and the human's commits flow back as state the personas
+  see. Supported as an explicit preempt — never silent concurrency; the charter still discourages
+  casual hand-editing.
+- **Granularity:** per-repo. Finer per-module locks are a future option for a large, partitionable
+  repo — not now.
+
 ## The portfolio manifest
 
 The team is declared, not ambient. One file (lives in the platform repo; trivial/absent for
