@@ -189,11 +189,13 @@ A fixed round-robin (Developer → Maven → …) makes every cross-persona hand
 lap. Instead, **the queue is the scheduler**: personas are dispatched by queue state and
 cadence, in a pipeline ordered by dependency — **Sense → Triage → Act → Audit**, repeating:
 
-1. **Sense** — auditors run (parallel fan-out, bounded + read-only) → findings to the queue.
-2. **Triage** — the **PM** grooms: dedup, frame, prioritize, escalate owner-class to
-   `/decisions`. The queue is now ordered and actionable.
-3. **Act** — the **Developer runs a continuous inner loop**, draining the actionable queue
-   (bugs first) under the writer lock until empty or budget-spent.
+1. **Sense** — personas run (auditors as parallel read-only fan-out) → emit **proposed actions
+   with readiness tags**, not just raw findings (see below).
+2. **Triage (two-tier funnel)** — repo Analyst → platform PM: split **ready** (→ prioritized Act
+   queue) from **parked/blocked** (→ routed for resolution), dedup, frame, escalate only
+   `decision` items to `/decisions`.
+3. **Act** — the **Developer runs a continuous inner loop**, draining the **ready** queue (bugs
+   first) under the writer lock until empty or budget-spent.
 4. **Audit** — the PM acceptance-audits the closed work.
 
 This dissolves handoff latency: a finding lands in the queue, the PM triages it, the Developer's
@@ -214,6 +216,41 @@ is assembled per persona, not fixed globally. E.g. Developer = on-demand + event
 ready); Leak Scanner = scheduled(daily) + event(pre-commit); Architect = summon-only; PM =
 scheduled(after sweeps) + on-demand. (Orchestration mechanism is built in Phase 4; this is the
 model it implements.)
+
+### Decisions don't block the cycle
+
+The cycle is **non-blocking**: a decision — or any blocker — holds up only the *action that
+depends on it*, never the pipeline. Act keeps draining everything `ready` while blocked items
+resolve in parallel. The human is a *resolver of one blocker type, reached asynchronously*, never
+a gate the cycle waits on.
+
+**Personas emit proposed actions, not just findings.** At Sense, each piece of work comes with
+*what the persona would do* plus a **readiness tag**: `ready`, or `blocked-by` one of —
+- **dependency** — needs another action/issue done first (intra- or cross-repo);
+- **coordination** — needs another persona/repo to act in concert (e.g. a cross-app contract);
+- **clarification** — needs an answer (from a persona, a PM, or the human);
+- **decision** — needs a human-authority call (money / direction / irreversible).
+
+The tag is a light stub; deep planning happens when the action is actually pulled.
+
+**Triage is the two-tier funnel that splits ready from parked:**
+- The **repo Product Analyst** prioritizes the `ready` actions into the Act queue and **resolves
+  what it can** locally (sequence a local dependency, answer an in-remit clarification, dedup) —
+  escalating up only what it can't.
+- The **platform PM** takes the cross-repo remainder, **redistributes** it (route a coordination
+  to the other repo's Analyst, sequence a cross-repo dependency, batch), resolves what's in its
+  authority, and **escalates to the human** only genuine `decision` items — framed, on the cockpit.
+- Each tier resolves-what-it-can, escalates-the-rest, so the human sees the minimum. This is the
+  escalation contract recursed onto blockers, run *in parallel* with Act.
+
+**Resolution is async and re-queues.** A blocked action is **parked**, not run. When its blocker
+clears — the human decides, a dependency completes, a coordination partner acts, a clarification
+returns — it flips to `ready` and the next Act pass takes it (polled each Triage, or
+event-triggered).
+
+The dashboard reflects this with a **parked set** beside decisions-waiting: each blocked action,
+its blocker type, and where it sits in the funnel — so "why isn't this done yet?" is always
+answerable.
 
 ## The portfolio manifest
 
