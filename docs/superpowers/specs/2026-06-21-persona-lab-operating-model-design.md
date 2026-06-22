@@ -136,6 +136,32 @@ authority sits*; mode says *how it's invoked right now*. Any rank can run in eit
 Invocation mode sets not just *how* a persona starts but its **lifecycle and default
 autonomy**.
 
+### Wake context (so "self-orient" is never blind)
+
+Every invocation carries a structured **wake context** the persona reads *first*: `correlation_id`,
+`trigger` (cycle | event:<name> | on-demand | summon), `cycle_id`/`stage`, `mode`, `repo`/scope,
+`actor`. The context **selects behavior** — Security Analyst woken `event:pr.merged` reviews that
+diff; woken `cycle/stage:sense` runs its full sweep; woken `summon` engages the human first. The
+dispatch mechanism (Phase 4) constructs and injects it; the model just defines its shape.
+
+### Observability — structured run-log + rollups
+
+Every wake writes one **structured run record** (NDJSON), keyed for slicing by `persona`, `repo`,
+`cycle_id`, `correlation_id`, time: `{ts_start, ts_end, trigger, stage, mode, persona, rank, repo,
+actor, outcome: acted|slept|escalated|blocked, actions[], declined:[{what,why}], links[],
+cost_tokens}`. No-ops and declines are recorded *with reasons*. Every bus write is stamped with the
+`correlation_id` (extending the comment-envelope footer) so issues created in a cycle tie back to it.
+
+- The log lives **off the work queue** (append-only, git-backed in home base, behind its own port).
+- **After-the-fact rollups** (the chosen surface): the PM assembles a per-cycle/per-event summary
+  from the records + stamped bus writes, surfaced in the cockpit ("1PM cycle: Sense found 3 →
+  Triage escalated 1 → Act fixed #41/#43, declined #38 → Audit confirmed").
+- **A live dashboard is deferred (Phase 2+)** and is *just another reader* of the same structured
+  log — no new plumbing. A mockup was explored: decisions panel as the loudest element; a live feed
+  showing trigger + stage + outcome incl. declines/no-ops; STAA pipeline strip; per-persona roster;
+  repo tabs; token cost. Delivered as a thin reader skill (`/feed`, optionally `/loop /feed`, or a
+  launched local SSE viewer on the project's port range).
+
 ### Lifecycle by mode
 
 **Dispatched — "act, then report" (autonomy ON, self-orienting):**
