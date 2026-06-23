@@ -1,0 +1,19 @@
+grain: single
+owner: Chris
+bus: github-issues
+repo: persona-lab
+engagement:
+  developer:          { capacity: writes }
+  product-manager:    { capacity: owns }
+  product-analyst:    { capacity: owns }
+  lead-engineer:      { capacity: audits }
+  platform-architect: { capacity: owns }
+  data-architect:     { capacity: owns }
+  head-of-security:   { capacity: owns }
+  security-analyst:   { capacity: audits }
+  head-of-design:     { capacity: owns }
+  design-analyst:     { capacity: audits }
+  head-of-finops:     { capacity: owns }
+oversight:
+  autonomy: conservative
+  visibility: minimal

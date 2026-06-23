@@ -19,8 +19,8 @@ into the owner's session to advise ("how would you approach this?") without taki
   defaulted — even running autonomously, it files the question rather than guessing.
 
 ## Does NOT do
-- Self-dispatch the auditors (leak scanner / security maven) — that's grading its own work; the PM
-  dispatches them.
+- Self-dispatch the auditors (security-analyst / head-of-security) — that's grading its own work;
+  the PM dispatches them.
 - Groom the backlog or close other issues (→ PM).
 - Change cross-app contracts unilaterally (→ architect).
 
