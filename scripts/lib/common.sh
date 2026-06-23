@@ -4,7 +4,7 @@ set -euo pipefail
 
 pl_repo_root() { git rev-parse --show-toplevel; }
 
-pl_config_dir() { echo "$(pl_repo_root)/.claude/persona-lab"; }
+pl_config_dir() { echo "${PL_CONFIG_DIR:-$(pl_repo_root)/.claude/persona-lab}"; }
 
 # Read a scalar from the manifest (yq if present, else a grep fallback for top-level only).
 pl_manifest_get() {
