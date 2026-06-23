@@ -21,5 +21,35 @@ case "$cmd" in
     [ -n "$title" ] || pl_die "file requires --title"
     gh issue create --title "$title" --body "$(pl_envelope "$persona" "$tier" "$rtype" "$body")"
     ;;
-  *) pl_die "verb $cmd not implemented yet";;
+  comment)
+    issue="${1:?comment <issue>}"; shift
+    persona="" tier="" rtype="HANDOFF" body=""
+    while [ $# -gt 0 ]; do case "$1" in
+      --persona) persona="$2"; shift 2;; --tier) tier="$2"; shift 2;;
+      --type) rtype="$2"; shift 2;; --body) body="$2"; shift 2;; *) pl_die "unknown arg $1";; esac; done
+    gh issue comment "$issue" --body "$(pl_envelope "$persona" "$tier" "$rtype" "$body")"
+    ;;
+  label)
+    issue="${1:?label <issue>}"; shift
+    case "$1" in
+      --add)    gh issue edit "$issue" --add-label "$2";;
+      --remove) gh issue edit "$issue" --remove-label "$2";;
+      *) pl_die "label needs --add/--remove";;
+    esac
+    ;;
+  close)
+    issue="${1:?close <issue>}"; shift; reason="completed"
+    [ "${1:-}" = "--reason" ] && reason="$2"
+    gh issue close "$issue" --reason "$reason"
+    ;;
+  query)
+    args=(issue list --json number,title,labels,state --limit 200)
+    while [ $# -gt 0 ]; do case "$1" in
+      --label) args+=(--label "$2"); shift 2;;
+      --state) args+=(--state "$2"); shift 2;;
+      *) shift;;
+    esac; done
+    gh "${args[@]}"
+    ;;
+  *) pl_die "unknown verb $cmd";;
 esac
