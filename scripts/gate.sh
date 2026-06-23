@@ -4,8 +4,9 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.s
 
 [ "${1:-}" = "check" ] || pl_die "usage: gate.sh check --head <sha>"; shift
 
-head=""
-[ "${1:-}" = "--head" ] && head="$2"
+[ "${1:-}" = "--head" ] || pl_die "gate: --head <sha> is required"
+head="${2:-}"
+[ -n "$head" ] || pl_die "gate: --head requires a non-empty SHA"
 
 cfg="$(pl_repo_root)/.claude/persona-lab"
 
