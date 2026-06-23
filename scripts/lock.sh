@@ -19,7 +19,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -n "$repo" ] || pl_die "lock.sh: --repo is required"
+[ -n "$repo" ] || pl_die "lock.sh: --repo required"
+case "$repo" in *[!A-Za-z0-9_.-]*|*..*) pl_die "lock.sh: invalid repo name '$repo'";; esac
+if [ -n "$holder" ]; then
+  case "$holder" in *[!A-Za-z0-9_.\ -]*) pl_die "lock.sh: invalid holder '$holder'";; esac
+fi
 
 ref="refs/heads/persona-lock/${repo}"
 
