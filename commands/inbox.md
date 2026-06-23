@@ -63,12 +63,25 @@ Expandable detail (show on request or if only one item):
 
 ### Step 3 — Zero state
 
-If **both** queries return zero items, render exactly the canonical string from
-`config/copy.json#zero_state` (read the file; do not paraphrase or vary):
+If **both** queries return zero items:
+
+1. Compute `{n}` = the count of open issues that are **not** labelled `needs-human:*` (the work
+   moving on its own) by running `scripts/queue.sh query` without a `needs-human` filter and
+   counting the results.
+2. Read the canonical string from `config/copy.json#zero_state` and substitute `{n}` with that
+   count. Never print a literal `{n}`.
+3. Emit **only** that substituted string — no section headers, no empty sections.
+
+Example output (count = 14):
 
 ```
-All clear — N items moving on their own, nothing needs you · see the team · /radar
+All clear — 14 items moving on their own, nothing needs you · see the team · /radar
 ```
+
+### Expanding an item
+
+To expand an item to its full framed package, reply with its issue number (or re-invoke
+`/inbox <number>`).
 
 ### What NOT to show here
 

@@ -19,7 +19,8 @@ The first positional argument (`$1`) is the persona name. Look it up in the `eng
 - Greet the user in-character for the persona.
 - Surface what you observe about the current state of the codebase / project as the persona would
   see it (read relevant files; use only the tools the persona's `capacity` permits via
-  `config/capability-map.json`).
+  `config/capability-map.json`). Keep the opening observation brief (2–3 sentences) and **lead
+  with the question** — engage, don't monologue.
 - Ask what the user wants to explore or decide.
 - Provide advice through the persona's lens, explaining the reasoning.
 - **Autonomy is OFF.** Do not make any changes, file any issues, or execute any mutations without
@@ -38,8 +39,9 @@ them.
 
 If the persona is `developer` and the mode is `--dispatch`:
 
-1. Run `scripts/lock.sh claim --repo <repo> --holder <persona-name>` (repo comes from
-   `manifest.yml → repo`). Record the returned fence SHA.
+1. Run `scripts/lock.sh claim --repo <repo> --holder <persona-name>` (`--repo` is the manifest
+   `repo` value; it names the lock ref (`persona-lock/<repo>`). `gh api` resolves the actual
+   GitHub `{owner}/{repo}` from the repo's remote, not from `--repo`). Record the returned fence SHA.
 2. Work inside a worktree (`claude --worktree`) for the unit of work.
 3. Immediately before any integrate-to-main push, run:
    ```
@@ -47,7 +49,10 @@ If the persona is `developer` and the mode is `--dispatch`:
    ```
    If verify-fence fails (mismatch), **abort the push**, checkpoint the work, and surface the
    conflict to the user. Do not force-push.
-4. On yield (task done or interrupted), run `scripts/lock.sh release --repo <repo>`.
+4. On normal yield (task done), run `scripts/lock.sh release --repo <repo>`. Release is
+   **best-effort**: on an abnormal or interrupted exit the lock may remain. In Phase 1 clear
+   it manually with `scripts/lock.sh release --repo <repo>` (automatic stale-lock recovery is
+   Phase 4).
 
 No other persona acquires the writer lock. Non-developer personas with `--dispatch` operate in
 read/advise/audit scope only; they do not write to the codebase.
