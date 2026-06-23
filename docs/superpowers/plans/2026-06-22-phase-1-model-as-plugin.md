@@ -421,43 +421,73 @@ git add scripts/runlog.sh tests/runlog.bats
 git commit -m "feat(runlog): append NDJSON run records"
 ```
 
-### Task C3: `lock.sh` — create-only CAS writer lock with fence (no force)
+### Task C3: `lock.sh` — create-only CAS writer lock with a real lock object + fence (no force)
 
-> Lock marker = a real branch `persona-lock/<repo>` pointing to a commit whose `lock.json` carries `{holder, claimed_at, fence}`. Claim = create ref (fails if exists); release = delete ref. NO force, NO update. Fence = the lock commit SHA; the holder re-asserts it before integrating. (Ruleset protection + server-side enforcement is Phase 4 with the bot; Phase 1 relies on serialize-at-dispatch + fence.)
+> **(Amended per the go/no-go vote — Ben + Mike.)** The lock marker is a real branch
+> `persona-lock/<repo>` pointing to a **dedicated lock commit** whose `lock.json` carries
+> `{holder, claimed_at, fence}` where **`fence` = that commit's own SHA**. Build it with the Git Data
+> API (blob → tree → commit), then **create-only** the ref at that commit (422 ⇒ lost the race — never
+> `--force`, never update). Release = delete ref. The holder **re-reads the ref fresh and re-asserts its
+> fence before every integrate-to-main push**; a mismatch ⇒ abort + checkpoint (this is what keeps Phase 1
+> safe before the Phase-4 bot's ruleset enforcement). Never point the ref at `HEAD`/a literal string —
+> always a resolved 40-char SHA. The lock object, the fence, and the verify step are the load-bearing
+> parts the earlier draft omitted; the test must assert the lock object + fence, not just create/delete.
 
 **Files:**
 - Create: `scripts/lock.sh`
 - Test: `tests/lock.bats`
 
-- [ ] **Step 1: Write the failing test** (gh stub: create returns 422 if marker "exists")
+- [ ] **Step 1: Write the failing test** (gh stub emulates blob/tree/commit/refs + ref read-back, so the test exercises the *lock object + fence*, not a shallow create)
 
 ```bash
 setup() {
-  export PL_TEST_BIN="$(mktemp -d)"; export PATH="$PL_TEST_BIN:$PATH"; export PL_GH_LOG="$(mktemp)"
-  export PL_LOCK_STATE="$(mktemp)"   # empty = unlocked
+  export PL_TEST_BIN="$(mktemp -d)"; export PATH="$PL_TEST_BIN:$PATH"
+  export PL_REF="$(mktemp)" PL_LOCKJSON="$(mktemp)"   # PL_REF empty = unlocked
   cat > "$PL_TEST_BIN/gh" <<'SH'
 #!/usr/bin/env bash
-echo "GH $*" >> "$PL_GH_LOG"
-case "$*" in
-  *"git/refs"*"POST"*|*"api -X POST"*) [ -s "$PL_LOCK_STATE" ] && { echo "HTTP 422 Reference already exists" >&2; exit 1; }; echo "created" > "$PL_LOCK_STATE";;
-  *"-X DELETE"*) : > "$PL_LOCK_STATE";;
+# minimal Git Data API emulator over two temp files
+case "$1 $2 $3" in
+  "api -X POST")
+    case "$4" in
+      *git/blobs*)  echo '{"sha":"blobsha"}';;
+      *git/trees*)  echo '{"sha":"treesha"}';;
+      *git/commits*) echo '{"sha":"commitsha111111111111111111111111111111"}';;
+      *git/refs*)
+        [ -s "$PL_REF" ] && { echo "HTTP 422 Reference already exists" >&2; exit 1; }
+        echo "commitsha111111111111111111111111111111" > "$PL_REF";;
+    esac;;
+  "api -X DELETE") : > "$PL_REF";;
+  "api -X PATCH") echo "REFUSED: no updates allowed" >&2; exit 99;;  # force/update must never be called
+  "api ")  # read: gh api repos/.../git/<ref>
+    [ -s "$PL_REF" ] && printf '{"object":{"sha":"%s"}}' "$(cat "$PL_REF")" || { echo "404" >&2; exit 1; };;
 esac
 SH
+  # the lock.json content the impl PUTs as a blob is captured by intercepting stdin in a wrapper if needed;
+  # here we assert via the impl writing its fence to stdout.
   chmod +x "$PL_TEST_BIN/gh"
 }
-teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_LOCK_STATE"; }
+teardown() { rm -rf "$PL_TEST_BIN" "$PL_REF" "$PL_LOCKJSON"; }
 
-@test "lock claim: first claim succeeds" {
+@test "lock claim: returns the fence (the lock commit SHA)" {
   run scripts/lock.sh claim --repo finances --holder Ben
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ]; [[ "$output" == "commitsha111111111111111111111111111111" ]]
 }
-@test "lock claim: second claim fails (already held)" {
-  scripts/lock.sh claim --repo finances --holder Ben
+@test "lock claim: second claim is refused (held), no force/update attempted" {
+  scripts/lock.sh claim --repo finances --holder Ben >/dev/null
   run scripts/lock.sh claim --repo finances --holder Alex
+  [ "$status" -ne 0 ]   # if the impl ever PATCHed, the stub exits 99 and this still fails — good
+}
+@test "verify-fence: matches the recorded fence while held, fails after a steal" {
+  fence="$(scripts/lock.sh claim --repo finances --holder Ben)"
+  run scripts/lock.sh verify-fence --repo finances --fence "$fence"
+  [ "$status" -eq 0 ]
+  # simulate a steal: ref now points elsewhere
+  echo "different2222222222222222222222222222222" > "$PL_REF"
+  run scripts/lock.sh verify-fence --repo finances --fence "$fence"
   [ "$status" -ne 0 ]
 }
 @test "lock release then re-claim succeeds" {
-  scripts/lock.sh claim --repo finances --holder Ben
+  scripts/lock.sh claim --repo finances --holder Ben >/dev/null
   scripts/lock.sh release --repo finances --holder Ben
   run scripts/lock.sh claim --repo finances --holder Alex
   [ "$status" -eq 0 ]
@@ -466,37 +496,50 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_LOCK_STATE"; }
 
 - [ ] **Step 2: Run, expect fail.**
 
-- [ ] **Step 3: Implement `lock.sh`** (create-only / delete-only via `gh api`; treat non-zero create as "lost")
+- [ ] **Step 3: Implement `lock.sh`** — build a real lock commit, create-only ref at its SHA, fresh-read verify-fence; never `HEAD`, never PATCH/force
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.sh"
-cmd="${1:?usage: lock.sh <claim|release|status> --repo R --holder H}"; shift
-repo="" holder=""
-while [ $# -gt 0 ]; do case "$1" in --repo) repo="$2"; shift 2;; --holder) holder="$2"; shift 2;; *) shift;; esac; done
+cmd="${1:?usage: lock.sh <claim|release|status|verify-fence> --repo R [--holder H] [--fence F]}"; shift
+repo="" holder="" fence=""
+while [ $# -gt 0 ]; do case "$1" in
+  --repo) repo="$2"; shift 2;; --holder) holder="$2"; shift 2;; --fence) fence="$2"; shift 2;; *) shift;; esac; done
 ref="refs/heads/persona-lock/${repo}"
 case "$cmd" in
   claim)
-    # create-only: POST a new ref; a 422 (already exists) means we lost — never force/update.
-    if gh api -X POST "repos/{owner}/{repo}/git/refs" -f ref="$ref" -f sha="HEAD" >/dev/null 2>&1; then
-      echo "claimed $repo by $holder"; else pl_die "lock held for $repo (claim refused — never force)"; fi ;;
+    # 1) build a dedicated lock commit carrying lock.json {holder, claimed_at, fence(filled after)}
+    lj="$(jq -nc --arg h "$holder" --arg t "$(date -u +%FT%TZ)" '{holder:$h, claimed_at:$t}')"
+    blob="$(gh api -X POST "repos/{owner}/{repo}/git/blobs" -f content="$lj" -f encoding=utf-8 -q .sha)"
+    tree="$(gh api -X POST "repos/{owner}/{repo}/git/trees" \
+              -f 'tree[][path]=lock.json' -f 'tree[][mode]=100644' -f 'tree[][type]=blob' -f "tree[][sha]=$blob" -q .sha)"
+    commit="$(gh api -X POST "repos/{owner}/{repo}/git/commits" -f message="persona-lock $repo by $holder" -f tree="$tree" -q .sha)"
+    # 2) create-only ref at the lock commit; 422 (exists) ⇒ we lost. fence = the commit SHA.
+    if gh api -X POST "repos/{owner}/{repo}/git/refs" -f ref="$ref" -f sha="$commit" >/dev/null 2>&1; then
+      echo "$commit"           # the fence — caller records it
+    else pl_die "lock held for $repo (claim refused — never force)"; fi ;;
+  verify-fence)
+    [ -n "$fence" ] || pl_die "verify-fence needs --fence"
+    cur="$(gh api "repos/{owner}/{repo}/git/${ref}" -q .object.sha 2>/dev/null || true)"
+    [ "$cur" = "$fence" ] || pl_die "fence mismatch (lock reclaimed) — abort the integrate, checkpoint instead" ;;
   release)
-    gh api -X DELETE "repos/{owner}/{repo}/git/${ref}" >/dev/null 2>&1 || true
-    echo "released $repo" ;;
+    gh api -X DELETE "repos/{owner}/{repo}/git/${ref}" >/dev/null 2>&1 || true; echo "released $repo" ;;
   status)
     gh api "repos/{owner}/{repo}/git/${ref}" >/dev/null 2>&1 && echo "held" || echo "free" ;;
   *) pl_die "unknown lock cmd $cmd";;
 esac
 ```
 
-- [ ] **Step 4: Run, expect pass** — `bats tests/lock.bats` → 3 PASS.
+- [ ] **Step 4: Run, expect pass** — `bats tests/lock.bats` → 4 PASS (incl. the fence + no-PATCH assertions).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Wire the fence check into the dispatch path** — the Developer, on `--dispatch`, records its fence at claim and calls `lock.sh verify-fence` immediately before any push to the main line; a mismatch aborts + checkpoints (never pushes). Note this in `commands/persona.md` (Task E1).
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add scripts/lock.sh tests/lock.bats
-git commit -m "feat(lock): create-only CAS writer lock (no force)"
+git commit -m "feat(lock): create-only CAS with real lock object + fence re-assert (no force)"
 ```
 
 ---
@@ -638,6 +681,154 @@ git commit -m "feat(agents): final roster briefings + generated access-locked ag
 
 ---
 
+## Task group V — verification spine (enforceable, not prose)
+
+> **(Added per the go/no-go vote — Greg's HOLD + Sarah.)** Phase 1 must ship the verification/review
+> contract as *tested code*, not briefing prose — otherwise self-closing with a free-text `PROOF` becomes
+> the norm from commit one, which is ruinous to retrofit. The human may play Lead Engineer *manually* in
+> Phase 1, but the **deterministic gate** that enforces "verification = manifest + artifact, not
+> attestation" exists and runs. This also freezes the canonical **schema set** (Sarah) as the one source
+> the gates assert against.
+
+### Task V1: `config/schemas/` — the frozen, versioned required-field schema set
+
+**Files:**
+- Create: `config/schemas/{review,run-record,needs-human-decision,needs-human-action}.json`
+- Create: `config/schemas/VERSION`
+- Test: `tests/schemas.bats`
+
+- [ ] **Step 1: Write the failing test**
+
+```bash
+@test "schemas: each package schema declares required fields and is valid JSON" {
+  for s in config/schemas/*.json; do jq -e '.required | type=="array" and length>0' "$s"; done
+}
+@test "schemas: REVIEW verdict enum is the canonical three" {
+  run jq -r '.properties.verdict.enum | join(",")' config/schemas/review.json
+  [ "$output" = "approved,changes-requested,bounce:out-of-scope" ]
+}
+```
+
+- [ ] **Step 2: Run, expect fail.**
+
+- [ ] **Step 3: Write the schemas** (one source of truth for every gate). `review.json`:
+
+```json
+{ "$id": "review", "type": "object",
+  "required": ["reviewer","commit_sha","verdict"],
+  "properties": {
+    "reviewer": {"type":"string"},
+    "commit_sha": {"type":"string","minLength":7},
+    "verdict": {"enum":["approved","changes-requested","bounce:out-of-scope"]},
+    "notes": {"type":"string"} } }
+```
+
+`run-record.json` (matches `runlog.sh`): required `["ts","persona","repo","trigger","outcome"]`, with
+`cost_tokens` present and **commented as harness-sourced, not self-reported** (Dave — reserve the field
+now). `needs-human-decision.json`: required `["question","why_now","options","recommendation","consequences","unblocks"]`.
+`needs-human-action.json`: required `["why","why_not_automated","steps","commands","verification"]`.
+`config/schemas/VERSION` = `1`.
+
+- [ ] **Step 4: Run, expect pass; commit**
+
+```bash
+bats tests/schemas.bats
+git add config/schemas tests/schemas.bats
+git commit -m "feat(schemas): frozen versioned required-field package set (v1)"
+```
+
+### Task V2: `scripts/gate.sh` — deterministic pre-close gate
+
+**Files:**
+- Create: `scripts/gate.sh`
+- Test: `tests/gate.bats`
+
+- [ ] **Step 1: Write the failing test** (stubs a verification-manifest run marker + a diff)
+
+```bash
+setup() {
+  export PL_WORK="$(mktemp -d)"; cd "$PL_WORK"; git init -q
+  mkdir -p .claude/persona-lab; echo '{"max_lines":400,"max_files":20}' > .claude/persona-lab/diff_budget.json
+}
+@test "gate: passes when manifest ran, diff within budget, and a REVIEW cites HEAD" {
+  echo a > f.txt; git add f.txt; git commit -qm x; head="$(git rev-parse HEAD)"
+  : > .claude/persona-lab/verified.marker          # verification manifest ran
+  echo "{\"commit_sha\":\"$head\",\"verdict\":\"approved\"}" > .claude/persona-lab/review.json
+  run "$OLDPWD/scripts/gate.sh" check --head "$head"
+  [ "$status" -eq 0 ]
+}
+@test "gate: fails when the REVIEW cites a stale commit (HEAD moved)" {
+  echo a > f.txt; git add f.txt; git commit -qm x
+  : > .claude/persona-lab/verified.marker
+  echo '{"commit_sha":"deadbeef","verdict":"approved"}' > .claude/persona-lab/review.json
+  echo b >> f.txt; git commit -aqm y; head="$(git rev-parse HEAD)"
+  run "$OLDPWD/scripts/gate.sh" check --head "$head"
+  [ "$status" -ne 0 ]
+}
+@test "gate: fails when no verification marker exists (self-close blocked)" {
+  echo a > f.txt; git add f.txt; git commit -qm x; head="$(git rev-parse HEAD)"
+  echo "{\"commit_sha\":\"$head\",\"verdict\":\"approved\"}" > .claude/persona-lab/review.json
+  run "$OLDPWD/scripts/gate.sh" check --head "$head"
+  [ "$status" -ne 0 ]
+}
+```
+
+- [ ] **Step 2: Run, expect fail.**
+
+- [ ] **Step 3: Implement `scripts/gate.sh`**
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.sh"
+[ "${1:-}" = "check" ] || pl_die "usage: gate.sh check --head <sha>"; shift
+head=""; [ "${1:-}" = "--head" ] && head="$2"
+cfg="$(pl_repo_root)/.claude/persona-lab"
+
+# 1) verification manifest must have run (marker written by the test/build commands)
+[ -f "$cfg/verified.marker" ] || pl_die "gate: verification manifest did not run (no marker) — not done"
+
+# 2) a REVIEW record must exist, be approved, and cite the CURRENT head (SHA-bound, no stale approval)
+rj="$cfg/review.json"; [ -f "$rj" ] || pl_die "gate: no REVIEW record"
+[ "$(jq -r .verdict "$rj")" = "approved" ] || pl_die "gate: REVIEW not approved"
+[ "$(jq -r .commit_sha "$rj")" = "$head" ] || pl_die "gate: REVIEW cites a stale commit (HEAD moved) — re-review"
+
+# 3) diff budget (added+removed across files, excluding lockfiles/generated) must hold
+budget="$cfg/diff_budget.json"
+if [ -f "$budget" ]; then
+  read -r ml mf < <(jq -r '"\(.max_lines) \(.max_files)"' "$budget")
+  lines="$(git diff --numstat HEAD~1 2>/dev/null | awk '{a+=$1+$2} END{print a+0}')"
+  files="$(git diff --name-only HEAD~1 2>/dev/null | wc -l | tr -d ' ')"
+  [ "${lines:-0}" -le "$ml" ] || pl_die "gate: diff $lines lines > budget $ml — re-scope"
+  [ "${files:-0}" -le "$mf" ] || pl_die "gate: diff $files files > budget $mf — re-scope"
+fi
+echo "gate: pass"
+```
+
+- [ ] **Step 4: Run, expect pass; commit**
+
+```bash
+bats tests/gate.bats
+git add scripts/gate.sh tests/gate.bats
+git commit -m "feat(gate): deterministic pre-close gate (manifest+artifact+SHA-bound REVIEW+budget)"
+```
+
+### Task V3: Wire the gate into close
+
+**Files:**
+- Modify: `commands/persona.md` (the Developer's close path)
+- Modify: the E4 acceptance (below)
+
+- [ ] **Step 1:** State in `commands/persona.md` that the Developer **cannot close** until `scripts/gate.sh check --head $(git rev-parse HEAD)` passes; a free-text `PROOF` alone is not a close. In Phase 1 the human emits the `REVIEW` record (playing Lead Engineer) — the *gate* is what's enforced, the reviewer can be manual.
+- [ ] **Step 2: Commit**
+
+```bash
+git add commands/persona.md
+git commit -m "feat(gate): block close until the deterministic gate passes"
+```
+
+---
+
 ## Task group E — launcher, cockpit, manifest, end-to-end
 
 ### Task E1: `/persona` launcher command
@@ -684,17 +875,21 @@ Run `scripts/queue.sh query --label needs-human:decision` and `--label needs-hum
 Render two sections — **Decisions waiting** (you choose) and **Actions for you** (you perform) —
 each item a one-line row `[severity] · who · the ask (≤8 words) · what it unblocks`, expandable
 to the full framed package (decision: options+recommendation; action: the runbook). If both are
-empty, show the zero state: "All clear — N items moving on their own, nothing needs you ·
-see the team · /radar". Never show radar/not-yet-ripe items here.
+empty, show the **canonical zero-state string** (defined once — see Step 2). Never show radar/not-yet-ripe items here.
 ```
 
-- [ ] **Step 2: Manual verify** — file a `needs-human:decision` test issue (`scripts/queue.sh file … && scripts/queue.sh label …`), run `/inbox`, confirm it shows under Decisions with the framed row; close it, run `/inbox`, confirm the zero state.
+- [ ] **Step 2: Pin ONE canonical zero-state string** (Laura — it was specified twice and would drift).
+  Define it once in `config/copy.json` as `zero_state`, value exactly:
+  `"All clear — N items moving on their own, nothing needs you · see the team · /radar"`. `commands/inbox.md`
+  and the opt-in session-start line both reference `config/copy.json#zero_state`; neither re-coins it.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Manual verify** — file a `needs-human:decision` test issue (`scripts/queue.sh file … && scripts/queue.sh label …`), run `/inbox`, confirm it shows under Decisions with the framed row; close it, run `/inbox`, confirm the zero state renders the canonical string.
+
+- [ ] **Step 4: Commit**
 
 ```bash
-git add commands/inbox.md
-git commit -m "feat(command): /inbox cockpit (two queues + zero state)"
+git add commands/inbox.md config/copy.json
+git commit -m "feat(command): /inbox cockpit (two queues + canonical zero state)"
 ```
 
 ### Task E3: Hand-write the instance manifest for one real repo
@@ -746,8 +941,14 @@ Expected: all tests pass.
   3. Re-file the same finding → `dedup.sh` returns `dup:` and no second issue is created.
   4. The PM (summoned) frames it and marks `needs-human:decision`.
   5. `/inbox` shows it under **Decisions waiting** as a framed row; the raw queue is one command away.
-  6. Resolve it; `/inbox` shows the **zero state**.
-  7. Dispatch the Developer on a scoped bug issue: it acquires the lock (`scripts/lock.sh status` → held), works in a worktree, closes with a `PROOF` comment, releases the lock.
+  6. Resolve it; `/inbox` shows the **zero state** (the one canonical string from Task E2).
+  7. Dispatch the Developer on a scoped bug issue: it acquires the lock (`scripts/lock.sh status` → held)
+     and records its fence, works in a worktree, **runs `scripts/lock.sh verify-fence` before integrating**
+     (must match), emits a `REVIEW` record (you play Lead Engineer) citing HEAD, and the close is **blocked
+     until `scripts/gate.sh check` passes** (verification marker + approved REVIEW on current HEAD + diff
+     budget) — a free-text `PROOF` alone does NOT close. Then it releases the lock.
+  8. Negative check: try to close with no verification marker → `gate.sh` refuses. Try to integrate after
+     forcing a fence mismatch → the Developer aborts instead of pushing.
 
 - [ ] **Step 3: Write the acceptance note** in `docs/superpowers/plans/2026-06-22-phase-1-ACCEPTANCE.md` with the rendered evidence (issue URLs/screenshots), per the verification discipline.
 
