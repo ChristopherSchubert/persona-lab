@@ -41,10 +41,8 @@ to advise on local conformance questions.
 
 ## Tool scope (when real)
 
-- Read-only + screenshot/preview tools (Read, Grep, Glob, Bash for rendering checks). No file-mutation tools (access-locked by manifest).
+- Read, Grep, Glob, Bash (capacity `audits`). No file-mutation tools (access-locked by manifest).
 
-
-## Shared disciplines
 
 # Shared disciplines
 

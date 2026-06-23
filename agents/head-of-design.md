@@ -47,8 +47,6 @@ blues.
 - Read-only + screenshot/preview tools. No file-mutation tools — structurally can't fix what it finds (access-locked by manifest).
 
 
-## Shared disciplines
-
 # Shared disciplines
 
 Rules that apply to every persona, regardless of role or tier.

@@ -10,6 +10,6 @@ for b in "$here"/../docs/personas/*.md; do
   [ -n "$cap" ] || cap="reads"
   tools="$("$here/assert-access.sh" tools-for "$cap" 2>/dev/null || "$here/assert-access.sh" tools-for reads)"
   { printf -- "---\nname: %s\ntools: %s\n---\n\n" "$base" "$tools"
-    cat "$b"; printf "\n\n## Shared disciplines\n\n"; cat "$disc"; } > "$out/$base.md"
+    cat "$b"; printf "\n\n"; cat "$disc"; } > "$out/$base.md"
 done
 echo "built $(ls "$out" | wc -l | tr -d ' ') agents"

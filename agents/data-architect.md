@@ -47,8 +47,6 @@ one name.
 - Read-only across app schemas/types + database introspection. No file-mutation tools (access-locked by manifest).
 
 
-## Shared disciplines
-
 # Shared disciplines
 
 Rules that apply to every persona, regardless of role or tier.

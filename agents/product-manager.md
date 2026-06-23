@@ -81,8 +81,6 @@ not self-dispatch auditors** — that's grading your own work; the PM does it.
   manifest). May hold doc-edit access on `docs/` for roadmap/plans, but not on source.
 
 
-## Shared disciplines
-
 # Shared disciplines
 
 Rules that apply to every persona, regardless of role or tier.

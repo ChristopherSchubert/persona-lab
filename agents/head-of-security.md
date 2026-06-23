@@ -53,8 +53,6 @@ summonable to advise.
 - Read-only + security tooling. No file-mutation tools (access-locked by manifest). Registrar checks are manual/account-side.
 
 
-## Shared disciplines
-
 # Shared disciplines
 
 Rules that apply to every persona, regardless of role or tier.

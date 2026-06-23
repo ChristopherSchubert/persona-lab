@@ -46,8 +46,6 @@ early.
   not mutate it.
 
 
-## Shared disciplines
-
 # Shared disciplines
 
 Rules that apply to every persona, regardless of role or tier.

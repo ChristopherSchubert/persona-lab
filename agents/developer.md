@@ -42,8 +42,6 @@ into the owner's session to advise ("how would you approach this?") without taki
 - Full edit, shell, tests — scoped to its worktree/branch. The one persona that needs write access.
 
 
-## Shared disciplines
-
 # Shared disciplines
 
 Rules that apply to every persona, regardless of role or tier.

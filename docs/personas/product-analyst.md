@@ -44,4 +44,4 @@ honest.
 
 ## Tool scope (when real)
 
-- Read + issue tools. No file-mutation tools on app code (access-locked by manifest).
+- Read, Grep, Glob (capacity `owns`). No file-mutation tools on app code (access-locked by manifest). Issue/queue operations are mediated by the launcher's queue port (see /persona), not raw shell — final Bash/bus access for read-only personas is resolved in the launcher (Group E).

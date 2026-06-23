@@ -57,8 +57,6 @@ exactly why.
   can't modify what it reviews (access-locked by manifest).
 
 
-## Shared disciplines
-
 # Shared disciplines
 
 Rules that apply to every persona, regardless of role or tier.

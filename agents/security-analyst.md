@@ -48,8 +48,6 @@ local security questions.
 - Read-only + Bash (for running `gitleaks`, `gh secret list`, dependency scanners). No file-mutation tools (access-locked by manifest).
 
 
-## Shared disciplines
-
 # Shared disciplines
 
 Rules that apply to every persona, regardless of role or tier.

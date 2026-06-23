@@ -43,8 +43,6 @@ money and silent until a bill or a tier limit surprises you.
 - Read-only dashboard/API access to the hosting, database, and metered-API providers. No file-mutation tools (access-locked by manifest).
 
 
-## Shared disciplines
-
 # Shared disciplines
 
 Rules that apply to every persona, regardless of role or tier.
