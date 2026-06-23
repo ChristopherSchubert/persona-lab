@@ -996,30 +996,31 @@ never a bare claim.
 - **The PM is the verification gate, not just the framing gate** — it bounces an under-verified
   escalation back ("verify it's actually needed first") exactly as it bounces an incomplete one.
 
-### Oversight is a spectrum — the human sets it
-How much surfaces to the human is a **preference, not a fixed rule**. Some want only the irreducible
-mandatory steps; others want to watch everything — the radar, the verification reasoning, every wake.
-The system supports the full range via an **oversight profile** the human sets at bootstrap and adjusts
-anytime (overridable per domain/severity — e.g. high visibility on security & money, minimal on routine
-dev). Three knobs:
-- **Visibility:** *minimal* (only ripe mandatory decisions/actions; silence otherwise — the default) →
-  *standard* (＋ a daily digest) → *high* (＋ `/radar` pushed, verification evidence and intermediate
-  proposals shown) → *observe-everything* (the live feed, every wake, full reasoning). The loud settings
-  are framed as **temporary diagnostic modes** ("turn this on to build trust, then turn it down"), not a
-  lifestyle — the default is calm and the system gently expects a return to it, so anxiety doesn't lead
-  someone to the firehose and then blame the system for the flood they opened.
-- **Involvement:** the delegation-charter breadth — tight (escalate more, the human decides more) ↔
-  loose (the agent decides more). Already a first-class, learning artifact.
-- **Cadence/channel:** push vs pull, daily scan on/off, notification thresholds.
+### Oversight: two distinct axes — don't conflate them
+Oversight splits into **autonomy** (how much the system *does* without the human — a security &
+governance matter) and **visibility** (how much the human *sees* — a UX preference). They are not the
+same knob, and they default differently.
 
-The surfaces that feed higher visibility already exist (the cockpit, `/radar`, the dashboard/live feed,
-the run-log, verification evidence); the profile just decides which are *pushed* vs *pull-only*.
+**Autonomy — conservative by default; an invariant, not a dial.** The system **does not run itself out
+of the box.** Default posture: **escalate-by-default, human-in-the-loop, and auto-mode / unattended
+dispatch OFF** — both opt-in and gated, never an install default. Autonomy *widens only by explicit human
+grant* via the delegation charter (the asymmetry: it narrows silently, widens only with approval; see
+"the human-decision boundary"). Bootstrap seeds the **conservative** charter; it never offers a
+"go autonomous" setting. This matches Claude's permission-first posture — earned authority, never assumed.
 
-**Invariant: visibility never lowers the verification bar.** Even at *observe-everything*, what's shown
-is *verified* radar and reasoning — not a return to dumping unverified claims; the human is still never
-the unverified link. Configurability changes how much is *displayed*, never what's *true* or *safe*. The
-no-radar / silence-default rules above are simply the *minimal* end of the dial — correct for most, not
-imposed on all.
+**Visibility — a preference, default minimal; not an install question.** Bootstrap ships **minimal**
+(only ripe mandatory items; silence otherwise). The human raises visibility *later* — per-moment ("watch
+this cycle", "show me how you got here") or by adjusting a profile anytime — once they've felt the
+system's volume (you can't price *minimal → standard → high → observe-everything* before using it, so
+it's not a day-one question). Higher settings push `/radar`, verification evidence, intermediate
+proposals, the live feed; they're framed as **temporary diagnostic modes** ("turn it on to build trust,
+then turn it down"). Overridable per domain (e.g. watch security & money closely, routine dev quiet).
+The surfaces already exist (cockpit, `/radar`, dashboard, run-log) — visibility only decides which are
+*pushed* vs *pull-only*.
+
+**Invariant: visibility never lowers the verification or autonomy bar.** Even at *observe-everything*,
+what's shown is *verified* reasoning, and seeing more never makes the system *do* more — display ≠
+authority. Changing visibility changes what's *displayed*, never what's *true*, *safe*, or *permitted*.
 
 ### Decisions and actions are different work — split them
 - **`decision`** — a judgment only the human can make. The human *chooses*; renders under **Decisions
@@ -1123,15 +1124,18 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
    personas get a distinct name per repo.
 6. Per persona: trigger mix (summon-only / on-demand / scheduled / event — event named) +
    access lock.
-7. Tooling: worktrees on? auto mode for unattended Developer? claim a port range?
+7. Tooling: worktrees on? claim a port range? (Auto-mode / unattended dispatch is **OFF by default** —
+   never an install default; opt-in and gated, granted later.)
 8. Seed the platform PM's **delegation charter** conservatively (escalate-by-default); the PM
    proposes widening it over time as it learns the human's judgment, never without approval.
 9. Daily **budget ceiling** (token/$) — hard-pause + alert at the limit; raising it is a human
    decision.
 10. Repo visibility (public/private) — public repos treat all non-human/non-bot content as
     untrusted, quarantined to triage.
-11. **Oversight profile** — visibility (minimal → observe-everything), involvement (delegation-charter
-    breadth), cadence/channel; default minimal, adjustable anytime, overridable per domain/severity.
+11. **Oversight** — two axes, both default to the safe end (not asked at install): **autonomy** is
+    conservative-by-default (escalate-by-default, no auto-mode — a governance invariant, earned via the
+    charter) and **visibility** defaults minimal (raised later, per-moment or anytime, overridable per
+    domain).
 
 ## Appendix B — primary sources informing the upgrades
 
