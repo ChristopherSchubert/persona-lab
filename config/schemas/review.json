@@ -1,0 +1,11 @@
+{
+  "$id": "review",
+  "type": "object",
+  "required": ["reviewer", "commit_sha", "verdict"],
+  "properties": {
+    "reviewer": {"type": "string"},
+    "commit_sha": {"type": "string", "minLength": 7},
+    "verdict": {"enum": ["approved", "changes-requested", "bounce:out-of-scope"]},
+    "notes": {"type": "string"}
+  }
+}

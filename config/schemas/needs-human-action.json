@@ -1,0 +1,12 @@
+{
+  "$id": "needs-human-action",
+  "type": "object",
+  "required": ["why", "why_not_automated", "steps", "commands", "verification"],
+  "properties": {
+    "why": {"type": "string"},
+    "why_not_automated": {"type": "string"},
+    "steps": {"type": "array", "items": {"type": "string"}},
+    "commands": {"type": "array", "items": {"type": "string"}},
+    "verification": {"type": "string"}
+  }
+}
