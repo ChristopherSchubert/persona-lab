@@ -47,7 +47,7 @@ case "$cmd" in
     while [ $# -gt 0 ]; do case "$1" in
       --label) args+=(--label "$2"); shift 2;;
       --state) args+=(--state "$2"); shift 2;;
-      *) shift;;
+      *) pl_die "query: unknown arg $1";;
     esac; done
     gh "${args[@]}"
     ;;

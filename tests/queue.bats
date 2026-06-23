@@ -21,6 +21,7 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG"; }
 @test "queue comment: appends an enveloped comment to an issue" {
   run scripts/queue.sh comment 42 --persona Ben --tier "finances Team · Developer" --type PROOF --body "fixed"
   [ "$status" -eq 0 ]; grep -q "issue comment 42" "$PL_GH_LOG"
+  grep -q "PROOF" "$PL_GH_LOG"
 }
 
 @test "queue label: adds a label" {
@@ -31,9 +32,11 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG"; }
 @test "queue close: closes with a state-reason" {
   run scripts/queue.sh close 42 --reason completed
   [ "$status" -eq 0 ]; grep -q "issue close 42" "$PL_GH_LOG"
+  grep -q -- "--reason completed" "$PL_GH_LOG"
 }
 
 @test "queue query: passes a search and requests json" {
   run scripts/queue.sh query --label needs-human:decision
   [ "$status" -eq 0 ]; grep -q "issue list" "$PL_GH_LOG"
+  grep -q -- "--json number,title,labels,state" "$PL_GH_LOG"
 }
