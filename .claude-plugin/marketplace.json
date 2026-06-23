@@ -1,0 +1,8 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "persona-lab-dev",
+  "owner": { "name": "Christopher Schubert" },
+  "plugins": [
+    { "name": "persona-lab", "source": "./", "description": "Persona Lab (local dev)" }
+  ]
+}
