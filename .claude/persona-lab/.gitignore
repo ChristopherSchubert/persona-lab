@@ -1,2 +1,5 @@
 fingerprints/
 runs/
+verified.marker
+review.json
+diff_budget.json
