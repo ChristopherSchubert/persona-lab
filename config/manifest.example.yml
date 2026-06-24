@@ -1,0 +1,87 @@
+# manifest.example.yml — documented shape for persona-lab instance manifests.
+# Copy this to .claude/persona-lab/manifest.yml and fill in your values.
+# The real manifest carries no comments (keeps it machine-readable); explanations live here.
+
+# grain: granularity of this persona-lab instance.
+#   single  — one product / repo; personas are loaded per-repo.
+#   multi   — a portfolio of repos; personas can be scoped per-repo or shared.
+grain: single
+
+# owner: the human who owns this instance and is the authority for needs-human escalations.
+#   Used in escalation routing and the lock holder display name.
+owner: Chris
+
+# bus: the issue bus backing the queue port (scripts/queue.sh).
+#   github-issues  — GitHub Issues via the gh CLI (the only supported value in Phase 1).
+bus: github-issues
+
+# repo: the target repository name (short form, e.g. "persona-lab").
+#   scripts/lock.sh and scripts/queue.sh use this to scope the writer lock ref and gh calls.
+repo: persona-lab
+
+# engagement: the roster of active personas for this instance.
+#   Keys are persona slugs matching agents/<slug>.md and docs/personas/<slug>.md.
+#   Each entry carries:
+#     capacity: one of writes | owns | audits | advises | reads  (see config/capability-map.json)
+#     trigger:  (optional) what wakes this persona — omit to rely on explicit /persona invocations.
+#
+#   Capacity drives the agent tools whitelist (config/capability-map.json):
+#     writes   — Read, Edit, Write, Bash, Grep, Glob  (Developer persona ONLY — codebase mutations)
+#     owns     — Read, Grep, Glob                     (domain owner; shapes strategy, files issues)
+#     audits   — Read, Grep, Glob, Bash               (reviewer; can run read-only shell checks)
+#     advises  — Read, Grep, Glob                     (advisor; read-only, proposes but does not act)
+#     reads    — Read, Grep, Glob                     (observer; read-only, no bus writes)
+#
+#   Only ONE persona may hold the `writes` capacity. All others are readers in terms of codebase
+#   access; their bus operations are mediated by the launcher (scripts/queue.sh verbs).
+engagement:
+  developer:
+    capacity: writes
+    # trigger: explicit dispatch only; never auto-woken.
+
+  product-manager:
+    capacity: owns
+    # trigger: new needs-human:decision items on the bus.
+
+  product-analyst:
+    capacity: owns
+    # trigger: explicit summon or new research tasks.
+
+  lead-engineer:
+    capacity: audits
+    # trigger: REVIEW requests filed by the Developer.
+
+  platform-architect:
+    capacity: owns
+
+  data-architect:
+    capacity: owns
+
+  head-of-security:
+    capacity: owns
+
+  security-analyst:
+    capacity: audits
+
+  head-of-design:
+    capacity: owns
+
+  design-analyst:
+    capacity: audits
+
+  head-of-finops:
+    capacity: owns
+
+# oversight: governance invariants that apply to every persona in every mode.
+oversight:
+  # autonomy: MUST always be "conservative" — this is an invariant, not a tunable.
+  #   conservative means: no persona takes irreversible action without explicit human sign-off;
+  #   the Developer acquires a writer lock before any codebase mutation; escalations are filed,
+  #   never silently defaulted; the close gate is enforced mechanically, not on trust.
+  #   Do not change this value.
+  autonomy: conservative
+
+  # visibility: how much unsolicited output personas emit during a session.
+  #   minimal — personas surface what is directly relevant; no unsolicited commentary or logs.
+  #   verbose — full reasoning traces (useful for debugging persona behaviour, not for production).
+  visibility: minimal

@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# Launch an interactive Claude Code session wearing a persona.
+# Summon a persona into a focused interactive Claude Code session.
 #
-#   bin/persona pm                 # groom/audit as the PM
-#   bin/persona platform-architect # design contracts/ADRs
-#   bin/persona writer             # implement (see worktree note below)
+#   bin/persona pm                 # groom/audit, or ask "what's next?"
+#   bin/persona platform-architect # talk through a contract/ADR
+#   bin/persona developer          # see autonomous-dev note below
 #
-# How it works: the persona briefing in docs/personas/<name>.md is appended to the
-# session's system prompt, so *this* session knows which hat it's wearing. CLAUDE.md
-# can't do that — every session in a repo reads the same CLAUDE.md — so identity has
-# to be session-scoped, which is exactly what --append-system-prompt gives us.
+# This is the *summon* path — one persona, brought into a session to do focused work or
+# advise. (The other path is *dispatch*: running a persona as a subagent autonomously,
+# e.g. via the Agent tool or a scheduled headless run. Same briefing either way.)
+#
+# How it works: the briefing in docs/personas/<name>.md is appended to the session's
+# system prompt, so *this* session knows which persona it is. CLAUDE.md can't do that —
+# every session in a repo reads the same CLAUDE.md — so identity must be session-scoped,
+# which is exactly what --append-system-prompt gives us.
 #
 # Durable state lives in files + issues, not the conversation, so each launch reloads
 # fresh. No persistent "standing" session is needed.
@@ -23,11 +27,12 @@ brief="$here/docs/personas/$name.md"
 # The owner is you, the human — not a session to launch.
 [[ "$name" == "owner" ]] && { echo "owner is you, not a session. read $brief"; exit 1; }
 
-# The writer edits app code, so it should run in an isolated git worktree against the
-# real repo — not here. This lab only scaffolds the model; wire that up when it's real.
-if [[ "$name" == "writer" ]]; then
-  echo "note: the writer edits app code — launch it inside a worktree of the target repo," >&2
-  echo "      not persona-lab. This script just shows the briefing-injection pattern." >&2
+# The developer holds the writer lock and edits app code — it normally runs *dispatched*
+# (autonomously, on the queue) inside an isolated git worktree of the real repo, not here.
+# Summoning it interactively is for advice; for real work, dispatch it against a worktree.
+if [[ "$name" == "developer" ]]; then
+  echo "note: the developer mutates app code under the writer lock — for real work, dispatch it" >&2
+  echo "      in a worktree of the target repo, not persona-lab. Summoning here is advice-only." >&2
 fi
 
 exec claude --append-system-prompt "You are the **$name** persona for this project.

@@ -35,33 +35,48 @@ Two ideas do the heavy lifting:
 ## The example personas
 
 A **starter set** — rename and re-scope to fit your project. The owner is you, the human; the rest
-are briefings an AI session loads.
+are **subagents** — each a briefing + a tool scope (see "One mechanism" below).
 
-| # | Persona | Lens | Launch mode | Can edit |
-|---|---------|------|-------------|----------|
-| — | **Owner** (you) | Product authority | n/a (the human) | anything |
-| 1 | **PM** | Backlog, roadmap, audits, the escalation funnel | interactive | issues only (propose) |
-| 2 | **Writer** | Implements one issue end-to-end | interactive (worktree) | app code |
-| 3 | **Platform architect** | Cross-app contracts, env topology, DNS, ADRs | interactive | docs/ADRs |
-| 4 | **Design maven** | Design-language coherence across apps | dispatched | read-only |
-| 5 | **Data-model librarian** | Shared domain nouns (the common ontology) | dispatched | read-only |
-| 6 | **Security maven** | Security review + registrar account | dispatched | read-only |
-| 7 | **Leak scanner** | Accidentally-stored info (secrets, PII, account refs) | dispatched / scheduled | read-only |
-| 8 | **Cost watch** | Hosting/DB tiers, spend, resource growth | dispatched / scheduled | read-only |
+`Access` is the read/write **lock**, not a persona trait: the **writer** is the single actor
+allowed to mutate app code at a time; everyone else is a **reader**. The Developer is the persona
+that takes the writer lock.
+
+| # | Persona | Lens | Access | Typically |
+|---|---------|------|--------|-----------|
+| — | **Owner** (you) | Product authority | — (the human) | the session you drive |
+| 1 | **PM** | Backlog, roadmap, audits, the escalation funnel | reader + issues | dispatched or summoned |
+| 2 | **Developer** | Implements one issue end-to-end | **writer** (app code) | dispatched, autonomous |
+| 3 | **Platform architect** | Cross-app contracts, env topology, DNS, ADRs | reader + docs | summoned; authors ADRs |
+| 4 | **Design maven** | Design-language coherence across apps | reader | dispatched / scheduled |
+| 5 | **Data-model librarian** | Shared domain nouns (the common ontology) | reader | dispatched / scheduled |
+| 6 | **Security maven** | Security review + registrar account | reader | dispatched / scheduled |
+| 7 | **Leak scanner** | Accidentally-stored info (secrets, PII, account refs) | reader | dispatched / scheduled |
+| 8 | **Cost watch** | Hosting/DB tiers, spend, resource growth | reader | dispatched / scheduled |
 
 The briefings live in [`docs/personas/`](docs/personas/). Start from
 [`_template.md`](docs/personas/_template.md) to add your own.
 
-## Two axes that actually matter
+## One mechanism, two ways to invoke
 
-There is **no "standing" persona** — none hold persistent context. Durable state lives in files and
-issues, so every persona reloads when it starts. What distinguishes them is:
+There is **no "interactive vs. autonomous" persona** and **no "standing" persona**. Every persona
+(except the owner) is the *same kind of thing*: a **subagent** — a briefing + a tool scope, with no
+persistent conversation context. Durable state lives in **files and issues**, so any persona
+reloads when it starts. What varies is only *how you invoke* a given subagent:
 
-1. **Who launches it** — *interactive* (a human opens it as a session) vs. *dispatched* (the PM
-   fans it out via the assistant's sub-agent mechanism, or a cron job runs it headless).
-2. **What it can edit** — the writer edits app code, the architect edits docs, the PM proposes on
-   issues, the scanners edit nothing. Auditor personas should literally **lack edit/write tools**,
-   so "you can't fix what you found — you file an issue" is structural, not aspirational.
+1. **Dispatched** — runs **autonomously to do its work**: the Developer implements an issue
+   end-to-end; the leak scanner runs its sweep; the PM grooms the queue. No human stepping through
+   it; results land as commits and issues. May run on demand or on a schedule.
+2. **Summoned** — pulled into the **owner's interactive session to advise**: "bring in the
+   architect — does this break a contract?" It answers or suggests back to the owner; it does not
+   act.
+
+Escalation-to-a-human survives in **both** modes: a summoned persona advises the owner directly; a
+dispatched persona escalates owner-class calls via the PM and issues. The human-in-the-loop
+guarantee is a property of the *contract*, not of how the subagent was launched.
+
+The one real per-persona axis is **access** (the lock): the Developer holds the **writer** lock and
+is the sole code-mutator; auditor personas are **readers** that should literally **lack edit/write
+tools**, so "you can't fix what you found — you file an issue" is structural, not aspirational.
 
 ## Escalation: the PM is the funnel
 
@@ -88,14 +103,16 @@ closed = the audit trail**. This is what lets stateless personas coordinate.
 ```
 docs/personas/   one briefing per persona (owner.md is the charter the others read)
   _template.md   shape for a new persona
-bin/persona      launcher: injects a briefing into an interactive AI session
+bin/persona      launcher: summon a persona into a focused interactive session
 ```
 
 ## Adopting this in your project
 
 1. Copy `docs/personas/` and edit each briefing to your project's reality.
-2. Decide which personas are interactive vs. dispatched.
-3. Wire the launcher (or your assistant's equivalent) and any scheduled jobs.
+2. Register each persona as a subagent your assistant can load (e.g. a `.claude/agents/` entry
+   that carries the briefing as its system prompt and the access scope as its tool whitelist).
+3. Decide each persona's default cadence — dispatched on demand, scheduled, or summon-only — but
+   remember any of them can also be summoned into a session to advise.
 4. Route all handoffs through your issue tracker.
 
 ## Status

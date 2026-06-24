@@ -1,0 +1,7 @@
+{
+  "writes":  ["Read","Edit","Write","Bash","Grep","Glob"],
+  "reads":   ["Read","Grep","Glob"],
+  "audits":  ["Read","Grep","Glob","Bash"],
+  "advises": ["Read","Grep","Glob"],
+  "owns":    ["Read","Grep","Glob"]
+}

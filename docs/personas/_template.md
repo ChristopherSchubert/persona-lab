@@ -1,8 +1,9 @@
 # <Persona name> — <one-line role>
 
 **Lens:** <the one thing this persona sees that nobody else does — its reason to exist>
-**Launch mode:** interactive | dispatched (Agent tool / cron `claude -p`)
-**Can edit:** <app code | docs | issues only | nothing (read-only)>
+**Access:** <reader (read-only) | reader + issues | reader + docs | writer (app code)>  ← the lock
+**Primary mode:** <dispatched (autonomous) | scheduled | summon-only> — but any persona can also be
+summoned into the owner's session to advise.
 
 ## Owns
 - <what falls squarely in this persona's scope>

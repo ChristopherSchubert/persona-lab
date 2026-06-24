@@ -1,0 +1,13 @@
+{
+  "$id": "needs-human-decision",
+  "type": "object",
+  "required": ["question", "why_now", "options", "recommendation", "consequences", "unblocks"],
+  "properties": {
+    "question": {"type": "string"},
+    "why_now": {"type": "string"},
+    "options": {"type": "array", "items": {"type": "string"}},
+    "recommendation": {"type": "string"},
+    "consequences": {"type": "string"},
+    "unblocks": {"type": "string"}
+  }
+}

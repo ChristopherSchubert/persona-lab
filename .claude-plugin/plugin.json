@@ -1,0 +1,11 @@
+{
+  "name": "persona-lab",
+  "displayName": "Persona Lab",
+  "description": "A multi-persona operating model for single-human-driven autonomous SDLC.",
+  "version": "0.1.0",
+  "author": { "name": "Christopher Schubert" },
+  "license": "MIT",
+  "agents": "./agents/",
+  "commands": "./commands/",
+  "skills": "./skills/"
+}
