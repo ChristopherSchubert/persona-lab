@@ -13,43 +13,59 @@ pl_envelope() { # persona tier type body
 
 case "$cmd" in
   file)
-    persona="" tier="" rtype="FINDING" title="" body=""
+    persona="" tier="" rtype="FINDING" title="" body="" repoflag=()
     while [ $# -gt 0 ]; do case "$1" in
       --persona) persona="$2"; shift 2;; --tier) tier="$2"; shift 2;;
       --type) rtype="$2"; shift 2;; --title) title="$2"; shift 2;;
-      --body) body="$2"; shift 2;; *) pl_die "unknown arg $1";; esac; done
+      --body) body="$2"; shift 2;;
+      --repo) repoflag=(--repo "$2"); shift 2;;
+      *) pl_die "unknown arg $1";; esac; done
     [ -n "$title" ] || pl_die "file requires --title"
-    gh issue create --title "$title" --body "$(pl_envelope "$persona" "$tier" "$rtype" "$body")"
+    gh issue create ${repoflag[@]+"${repoflag[@]}"} --title "$title" --body "$(pl_envelope "$persona" "$tier" "$rtype" "$body")"
     ;;
   comment)
     issue="${1:?comment <issue>}"; shift
-    persona="" tier="" rtype="HANDOFF" body=""
+    persona="" tier="" rtype="HANDOFF" body="" repoflag=()
     while [ $# -gt 0 ]; do case "$1" in
       --persona) persona="$2"; shift 2;; --tier) tier="$2"; shift 2;;
-      --type) rtype="$2"; shift 2;; --body) body="$2"; shift 2;; *) pl_die "unknown arg $1";; esac; done
-    gh issue comment "$issue" --body "$(pl_envelope "$persona" "$tier" "$rtype" "$body")"
+      --type) rtype="$2"; shift 2;; --body) body="$2"; shift 2;;
+      --repo) repoflag=(--repo "$2"); shift 2;;
+      *) pl_die "unknown arg $1";; esac; done
+    gh issue comment ${repoflag[@]+"${repoflag[@]}"} "$issue" --body "$(pl_envelope "$persona" "$tier" "$rtype" "$body")"
     ;;
   label)
-    issue="${1:?label <issue>}"; shift
-    case "$1" in
-      --add)    gh issue edit "$issue" --add-label "$2";;
-      --remove) gh issue edit "$issue" --remove-label "$2";;
-      *) pl_die "label needs --add/--remove";;
-    esac
+    issue="${1:?label <issue>}"; shift; repoflag=(); addlabel=""; removelabel=""
+    while [ $# -gt 0 ]; do case "$1" in
+      --repo)   repoflag=(--repo "$2"); shift 2;;
+      --add)    addlabel="$2"; shift 2;;
+      --remove) removelabel="$2"; shift 2;;
+      *) pl_die "label: unknown arg $1";; esac; done
+    if [ -n "$addlabel" ]; then
+      gh issue edit ${repoflag[@]+"${repoflag[@]}"} "$issue" --add-label "$addlabel"
+    elif [ -n "$removelabel" ]; then
+      gh issue edit ${repoflag[@]+"${repoflag[@]}"} "$issue" --remove-label "$removelabel"
+    else
+      pl_die "label needs --add/--remove"
+    fi
     ;;
   close)
-    issue="${1:?close <issue>}"; shift; reason="completed"
-    [ "${1:-}" = "--reason" ] && reason="$2"
-    gh issue close "$issue" --reason "$reason"
+    issue="${1:?close <issue>}"; shift; reason="completed"; repoflag=()
+    while [ $# -gt 0 ]; do case "$1" in
+      --reason) reason="$2"; shift 2;;
+      --repo) repoflag=(--repo "$2"); shift 2;;
+      *) pl_die "close: unknown arg $1";; esac; done
+    gh issue close ${repoflag[@]+"${repoflag[@]}"} "$issue" --reason "$reason"
     ;;
   query)
     args=(issue list --json number,title,labels,state --limit 200)
+    repoflag=()
     while [ $# -gt 0 ]; do case "$1" in
       --label) args+=(--label "$2"); shift 2;;
       --state) args+=(--state "$2"); shift 2;;
+      --repo) repoflag=(--repo "$2"); shift 2;;
       *) pl_die "query: unknown arg $1";;
     esac; done
-    gh "${args[@]}"
+    gh ${repoflag[@]+"${repoflag[@]}"} "${args[@]}"
     ;;
   *) pl_die "unknown verb $cmd";;
 esac

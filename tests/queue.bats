@@ -40,3 +40,30 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG"; }
   [ "$status" -eq 0 ]; grep -q "issue list" "$PL_GH_LOG"
   grep -q -- "--json number,title,labels,state" "$PL_GH_LOG"
 }
+
+@test "queue file --repo: targets the named repo" {
+  run scripts/queue.sh file --repo o/r --persona Ben --tier "t · Developer" --type FINDING --title x --body y
+  [ "$status" -eq 0 ]; grep -q -- "--repo o/r" "$PL_GH_LOG"
+}
+
+@test "queue query --repo: targets the named repo" {
+  run scripts/queue.sh query --repo o/r --label needs-human:decision
+  [ "$status" -eq 0 ]; grep -q -- "--repo o/r" "$PL_GH_LOG"
+}
+
+@test "queue file without --repo: no stray --repo flag" {
+  run scripts/queue.sh file --persona Ben --tier "t · Developer" --type FINDING --title x --body y
+  [ "$status" -eq 0 ]
+  ! grep -q -- "--repo" "$PL_GH_LOG"
+}
+
+@test "queue query without --repo: no stray --repo flag" {
+  run scripts/queue.sh query --label needs-human:decision
+  [ "$status" -eq 0 ]
+  ! grep -q -- "--repo" "$PL_GH_LOG"
+}
+
+@test "queue label --repo (any order) targets the repo" {
+  run scripts/queue.sh label 7 --repo o/r --add needs-human:decision
+  [ "$status" -eq 0 ]; grep -q -- "--repo o/r" "$PL_GH_LOG"; grep -q -- "--add-label needs-human:decision" "$PL_GH_LOG"
+}

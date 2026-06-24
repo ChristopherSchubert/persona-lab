@@ -85,3 +85,16 @@ oversight:
   #   minimal — personas surface what is directly relevant; no unsolicited commentary or logs.
   #   verbose — full reasoning traces (useful for debugging persona behaviour, not for production).
   visibility: minimal
+
+# --- Platform shape (Phase 3, multi-repo) — produced by `scripts/promote.sh --add-repo <name>` ---
+#
+# grain: platform
+# repos: [finances, travel]          # member repos; platform seniors own cross-app artifacts
+# engagement:
+#   product-manager:    { capacity: owns }    # platform tier (singleton): portfolio roadmap + funnel
+#   platform-architect: { capacity: owns }    # cross-app contracts/ADRs
+#   developer:          { capacity: writes }  # repo tier: instantiated per member repo
+#   product-analyst:    { capacity: owns }    # repo tier: local queue per member repo
+# oversight:
+#   autonomy: conservative
+#   visibility: minimal
