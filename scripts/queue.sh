@@ -34,13 +34,19 @@ case "$cmd" in
     gh issue comment ${repoflag[@]+"${repoflag[@]}"} "$issue" --body "$(pl_envelope "$persona" "$tier" "$rtype" "$body")"
     ;;
   label)
-    issue="${1:?label <issue>}"; shift; repoflag=()
-    [ "${1:-}" = "--repo" ] && { repoflag=(--repo "$2"); shift 2; }
-    case "$1" in
-      --add)    gh issue edit ${repoflag[@]+"${repoflag[@]}"} "$issue" --add-label "$2";;
-      --remove) gh issue edit ${repoflag[@]+"${repoflag[@]}"} "$issue" --remove-label "$2";;
-      *) pl_die "label needs --add/--remove";;
-    esac
+    issue="${1:?label <issue>}"; shift; repoflag=(); addlabel=""; removelabel=""
+    while [ $# -gt 0 ]; do case "$1" in
+      --repo)   repoflag=(--repo "$2"); shift 2;;
+      --add)    addlabel="$2"; shift 2;;
+      --remove) removelabel="$2"; shift 2;;
+      *) pl_die "label: unknown arg $1";; esac; done
+    if [ -n "$addlabel" ]; then
+      gh issue edit ${repoflag[@]+"${repoflag[@]}"} "$issue" --add-label "$addlabel"
+    elif [ -n "$removelabel" ]; then
+      gh issue edit ${repoflag[@]+"${repoflag[@]}"} "$issue" --remove-label "$removelabel"
+    else
+      pl_die "label needs --add/--remove"
+    fi
     ;;
   close)
     issue="${1:?close <issue>}"; shift; reason="completed"; repoflag=()

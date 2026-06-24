@@ -62,3 +62,8 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG"; }
   [ "$status" -eq 0 ]
   ! grep -q -- "--repo" "$PL_GH_LOG"
 }
+
+@test "queue label --repo (any order) targets the repo" {
+  run scripts/queue.sh label 7 --repo o/r --add needs-human:decision
+  [ "$status" -eq 0 ]; grep -q -- "--repo o/r" "$PL_GH_LOG"; grep -q -- "--add-label needs-human:decision" "$PL_GH_LOG"
+}
