@@ -184,3 +184,21 @@ If the invariant check passes, report:
 >
 > Note: re-running `/persona-init` is safe to attempt; `init.sh` refuses to clobber the manifest
 > without explicit confirmation and `--force`.
+
+---
+
+## Promotion to platform (Phase 3)
+
+The bootstrap creates a **single-repo install** (grain: single). When a second app appears, run:
+
+```bash
+scripts/promote.sh --add-repo <name>
+```
+
+This converts the manifest from single-repo form to platform form (grain: platform, adds `repos:` list with the new member repo). Cross-repo issue operations then use:
+
+```bash
+scripts/queue.sh <verb> --repo <owner/name>
+```
+
+Platform-tier personas (singleton roles like `product-manager` and `platform-architect`) are then automatically instantiated and can operate across repos.
