@@ -14,3 +14,7 @@ teardown() { rm -rf "$PL_CONFIG_DIR"; }
   run scripts/init.sh --repo b --owner y --personas "developer:writes"
   [ "$status" -ne 0 ]
 }
+@test "init: rejects an unknown capacity" {
+  run scripts/init.sh --repo r --owner o --personas "developer:wrtes"
+  [ "$status" -ne 0 ]
+}

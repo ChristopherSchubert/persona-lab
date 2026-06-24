@@ -2,6 +2,17 @@
 description: Bootstrap persona-lab in this repo — interview, generate config, go live.
 ---
 
+## Prerequisites
+
+This command requires the following tools to be installed:
+
+- `yq` — YAML parser (brew install yq); required for manifest reads in `build-agents.sh`
+- `jq` — JSON processor (brew install jq); required for capacity validation in `init.sh`
+- `gh` — GitHub CLI (brew install gh); required for repo detection and label provisioning
+- `bats` — Bash test framework (brew install bats-core); required for running `bats tests/`
+
+---
+
 ## /persona-init — bootstrap interview
 
 Run the interview **one question at a time**. Do not dump all questions at once. Wait for each
@@ -150,17 +161,16 @@ Before declaring success, verify that Write/Edit access is confined to the devel
 Run:
 
 ```bash
-grep -l "Write\|Edit" agents/*.md
+scripts/verify-locks.sh
 ```
 
-Expected result: **only `agents/developer.md`** appears. If any other file appears in the output,
-**STOP immediately** and report:
+This script asserts both:
+- **Positive**: `agents/developer.md` MUST have both `Write` and `Edit` in its `tools:` line (catches silent degradation where the developer loses write access).
+- **Negative**: no other agent may have `Write` or `Edit` in its `tools:` line.
 
-> Access-lock violation: the following agents have Write or Edit in their tools line but should
-> not: <list the offending files>. Do not proceed — investigate `scripts/build-agents.sh` and the
-> manifest capacities before using any persona.
+If `verify-locks.sh` exits non-zero, **STOP immediately** — do not proceed. Report the error message from the script verbatim and investigate `scripts/build-agents.sh` and the manifest capacities before using any persona.
 
-Do not proceed past this check if it fails.
+Note: valid capacity values are exactly `writes`, `owns`, `audits`, `advises`, `reads`.
 
 ---
 

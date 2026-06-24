@@ -15,9 +15,12 @@ cfg="$(pl_config_dir)"; mf="$cfg/manifest.yml"; mkdir -p "$cfg"
   echo "bus: github-issues"
   echo "repo: $repo"
   echo "engagement:"
+  capmap="$(pl_repo_root)/config/capability-map.json"
   IFS=','; for p in $personas; do
     name="${p%%:*}"; cap="${p##*:}"
     case "$name" in *[!a-z-]*) pl_die "init: invalid persona '$name'";; esac
+    jq -e --arg c "$cap" 'has($c)' "$capmap" >/dev/null 2>&1 \
+      || pl_die "init: unknown capacity '$cap' for '$name' — valid: writes, owns, audits, advises, reads"
     printf '  %s: { capacity: %s }\n' "$name" "$cap"
   done; unset IFS
   echo "oversight:"
