@@ -7,8 +7,11 @@ cmd="${1:?usage: queue.sh <file|comment|label|close|query> ...}"; shift
 # comment envelope: header line + body + collapsed provenance footer
 pl_envelope() { # persona tier type body
   local persona="$1" tier="$2" rtype="$3" body="$4"
-  printf '🤖 **%s** (%s) · %s\n\n%s\n\n<details><summary>AI persona — not the human</summary>\n%s · %s\n</details>\n' \
-    "$persona" "$tier" "$rtype" "$body" "$persona ($tier)" "$(date -u +%FT%TZ)"
+  local slug avatar
+  slug="$(printf '%s' "$persona" | tr '[:upper:]' '[:lower:]' | sed 's/é/e/g' | tr -d ' ')"
+  avatar="https://raw.githubusercontent.com/ChristopherSchubert/persona-lab/main/assets/avatars/${slug}/${slug}-64.png"
+  printf '<img src="%s" width="18"> 🤖 **%s** (%s) · %s\n\n%s\n\n<details><summary>AI persona — not the human</summary>\n%s · %s\n</details>\n' \
+    "$avatar" "$persona" "$tier" "$rtype" "$body" "$persona ($tier)" "$(date -u +%FT%TZ)"
 }
 
 case "$cmd" in
