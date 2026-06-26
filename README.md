@@ -1,125 +1,150 @@
-# persona-lab
+<div align="center">
 
-A lightweight **multi-persona operating model** for running a software project — especially a
-multi-app platform — with an AI coding assistant like [Claude Code](https://claude.com/claude-code).
-Instead of one undifferentiated "assistant," work is split across **personas**: distinct lenses,
-each with a clear scope, a tool boundary, and a defined way to hand off.
+<img src="assets/avatars/sarah/sarah-64.png" width="50" alt="Sarah">&nbsp;<img src="assets/avatars/greg/greg-64.png" width="50" alt="Greg">&nbsp;<img src="assets/avatars/tom/tom-64.png" width="50" alt="Tom">&nbsp;<img src="assets/avatars/raj/raj-64.png" width="50" alt="Raj">&nbsp;<img src="assets/avatars/mike/mike-64.png" width="50" alt="Mike">&nbsp;<img src="assets/avatars/laura/laura-64.png" width="50" alt="Laura">&nbsp;<img src="assets/avatars/dave/dave-64.png" width="50" alt="Dave">&nbsp;<img src="assets/avatars/ben/ben-64.png" width="50" alt="Ben">&nbsp;<img src="assets/avatars/zoe/zoe-64.png" width="50" alt="Zoe">&nbsp;<img src="assets/avatars/max/max-64.png" width="50" alt="Max">&nbsp;<img src="assets/avatars/esme/esme-64.png" width="50" alt="Esmé">
 
-It's aimed at a **solo developer or small team** where one human is the product owner and an AI
-does most of the legwork across several roles — but the separation of concerns generalizes to any
-team.
+# Persona Lab
 
-**The defining feature: escalation back to a human is built in.** Every persona has a bright line
-between what it may decide on its own and what it must hand up. Owner-class calls — money,
-direction, anything irreversible — don't get silently defaulted by an AI; they route, framed, to a
-human who decides. The model is human-in-the-loop *by construction*, not by reminder.
+**A multi-persona operating model for single-human-driven, mostly-autonomous software development.**
 
-## Why personas
+Instead of one undifferentiated assistant, you get a *team* — distinct named personas, each with its own lens, a hard tool boundary, and a defined way to hand off. You drive; they do the legwork; only the calls that are genuinely yours come back up to you.
 
-A persona earns its place only if it has a **lens or a data source nobody else is looking at**. If
-a proposed role is really just someone's definition-of-done wearing a costume (QA, ops, docs, a
-generic "release engineer"), it isn't a persona — fold it into an existing role.
+![version](https://img.shields.io/badge/version-0.1.0-3b82f6) &nbsp;![license](https://img.shields.io/badge/license-MIT-22c55e) &nbsp;![plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)
 
-Two ideas do the heavy lifting:
+</div>
 
-1. **Separate authority from legwork, with escalation built in.** The **owner** (a human) holds
-   product authority — money, direction, anything irreversible or outward-facing. Every other
-   persona does the work and *escalates* owner-class decisions rather than making them. The
-   escalation isn't an optional courtesy — it's part of each persona's contract: a defined
-   "decides vs. escalates" boundary, and a routing path that ends at a human. An AI persona that
-   hits an owner-class call is *required* to hand up, framed, never to guess.
-2. **Personas are stateless.** None hold persistent conversation context. Durable state lives in
-   **files and issues**, so any persona reloads its state when it starts. That's what lets
-   independent sessions — or scheduled jobs — coordinate without shared memory.
+---
 
-## The example personas
+## What it is
 
-A **starter set** — rename and re-scope to fit your project. The owner is you, the human; the rest
-are **subagents** — each a briefing + a tool scope (see "One mechanism" below).
+A [Claude Code](https://claude.com/claude-code) plugin. Install it into a repo, run `/persona-init`, answer a short interview, and the repo goes from empty to a working team: personas registered as access-locked subagents, a GitHub-issues bus, a writer lock, and a verification gate.
 
-`Access` is the read/write **lock**, not a persona trait: the **writer** is the single actor
-allowed to mutate app code at a time; everyone else is a **reader**. The Developer is the persona
-that takes the writer lock.
+Three ideas do the heavy lifting:
 
-| # | Persona | Lens | Access | Typically |
-|---|---------|------|--------|-----------|
-| — | **Owner** (you) | Product authority | — (the human) | the session you drive |
-| 1 | **PM** | Backlog, roadmap, audits, the escalation funnel | reader + issues | dispatched or summoned |
-| 2 | **Developer** | Implements one issue end-to-end | **writer** (app code) | dispatched, autonomous |
-| 3 | **Platform architect** | Cross-app contracts, env topology, DNS, ADRs | reader + docs | summoned; authors ADRs |
-| 4 | **Design maven** | Design-language coherence across apps | reader | dispatched / scheduled |
-| 5 | **Data-model librarian** | Shared domain nouns (the common ontology) | reader | dispatched / scheduled |
-| 6 | **Security maven** | Security review + registrar account | reader | dispatched / scheduled |
-| 7 | **Leak scanner** | Accidentally-stored info (secrets, PII, account refs) | reader | dispatched / scheduled |
-| 8 | **Cost watch** | Hosting/DB tiers, spend, resource growth | reader | dispatched / scheduled |
+- **Authority is separate from legwork — and escalation is built in.** Every persona has a bright line between what it may decide alone and what it must hand up. Money, direction, anything irreversible or outward-facing is *yours*; an AI persona that hits one of those calls is required to file it, framed, never to guess.
+- **Personas are stateless.** None hold conversation context. Durable state lives in files and issues, so any persona reloads when it starts — which is what lets independent sessions and scheduled jobs coordinate without shared memory.
+- **Access is structural, not aspirational.** "You can't fix what you found — you file an issue" is enforced by the tool whitelist, not by a reminder. Only the Developer persona has write tools.
 
-The briefings live in [`docs/personas/`](docs/personas/). Start from
-[`_template.md`](docs/personas/_template.md) to add your own.
+---
 
-## One mechanism, two ways to invoke
+## Meet the team
 
-There is **no "interactive vs. autonomous" persona** and **no "standing" persona**. Every persona
-(except the owner) is the *same kind of thing*: a **subagent** — a briefing + a tool scope, with no
-persistent conversation context. Durable state lives in **files and issues**, so any persona
-reloads when it starts. What varies is only *how you invoke* a given subagent:
+Two tiers. **Platform specialists** are singletons — one standing expert per discipline, working across all your repos. The **repo team** is instantiated per project, with names drawn from per-role pools, so your `finances` Developer is a different person from another repo's.
 
-1. **Dispatched** — runs **autonomously to do its work**: the Developer implements an issue
-   end-to-end; the leak scanner runs its sweep; the PM grooms the queue. No human stepping through
-   it; results land as commits and issues. May run on demand or on a schedule.
-2. **Summoned** — pulled into the **owner's interactive session to advise**: "bring in the
-   architect — does this break a contract?" It answers or suggests back to the owner; it does not
-   act.
+### Platform tier
 
-Escalation-to-a-human survives in **both** modes: a summoned persona advises the owner directly; a
-dispatched persona escalates owner-class calls via the PM and issues. The human-in-the-loop
-guarantee is a property of the *contract*, not of how the subagent was launched.
+| | Persona | Lens | Access |
+|:--:|---|---|:--:|
+| <img src="assets/avatars/sarah/sarah-64.png" width="44"> | **Sarah** · Product Manager | Grooms the queue, surfaces your decisions, audits closes | reader |
+| <img src="assets/avatars/greg/greg-64.png" width="44"> | **Greg** · Lead Engineer | Owns code review and the verification gate | reader |
+| <img src="assets/avatars/tom/tom-64.png" width="44"> | **Tom** · Platform Architect | Cross-app contracts, env topology, ADRs | reader |
+| <img src="assets/avatars/raj/raj-64.png" width="44"> | **Raj** · Data Architect | The shared data model / domain ontology | reader |
+| <img src="assets/avatars/mike/mike-64.png" width="44"> | **Mike** · Head of Security | Risk-first audits, rooted in real risk | auditor |
+| <img src="assets/avatars/laura/laura-64.png" width="44"> | **Laura** · Head of Design | UX and design-system coherence | reader |
+| <img src="assets/avatars/dave/dave-64.png" width="44"> | **Dave** · Head of FinOps | Guards the spend, per dollar and per token | reader |
 
-The one real per-persona axis is **access** (the lock): the Developer holds the **writer** lock and
-is the sole code-mutator; auditor personas are **readers** that should literally **lack edit/write
-tools**, so "you can't fix what you found — you file an issue" is structural, not aspirational.
+### Repo team — example: `finances`
 
-## Escalation: the PM is the funnel
+| | Persona | Lens | Access |
+|:--:|---|---|:--:|
+| <img src="assets/avatars/ben/ben-64.png" width="44"> | **Ben** · Developer | Implements one issue end-to-end | **writer** |
+| <img src="assets/avatars/zoe/zoe-64.png" width="44"> | **Zoe** · Product Analyst | Triages the queue, writes acceptance criteria | reader |
+| <img src="assets/avatars/max/max-64.png" width="44"> | **Max** · Security Analyst | Scans diffs for real, exploitable risk | auditor |
+| <img src="assets/avatars/esme/esme-64.png" width="44"> | **Esmé** · Design Analyst | Checks UI against the design system | reader |
 
-Personas do **not** all escalate to the owner directly — that makes the owner a fan-in bottleneck
-flooded with half-framed asks. Two paths:
+**Access** is the lock, not a personality trait:
 
-- **Default path** — a persona's output is a *finding* or *proposal*, not a decision. It becomes an
-  **issue**. The PM grooms, dedups, and frames the genuinely owner-class items, and brings the
-  owner **one curated stream** with options + a recommendation.
-- **Incident path** — a narrow bypass for *time-critical + high-blast-radius* only (active registrar
-  hijack, live leaked credential, real PII publicly exposed). These page the owner directly, PM
-  cc'd.
+- **writer** — the single actor allowed to mutate app code at any one time. The Developer takes this lock; no one else has edit tools.
+- **auditor** — read + run (can execute scans and tests), never write.
+- **reader** — read-only.
 
-The PM funnels **decisions**, not **information**: the issue tracker stays open, so the owner can
-always read the raw queue and catch anything the PM filtered.
+Briefings live in [`docs/personas/`](docs/personas/); start from [`_template.md`](docs/personas/_template.md) to add your own. Names are proposed defaults from [`_name-pools.md`](docs/personas/_name-pools.md) — rename anyone at any time; the role's authority and access never change.
 
-## Handoff is issues-only
+---
 
-Personas never talk to each other directly. The issue tracker is the bus: **open = the live queue,
-closed = the audit trail**. This is what lets stateless personas coordinate.
+## How it works
+
+### The loop
+
+```
+You ──▶ Sarah (files & grooms) ──▶ Ben (builds, holds the lock) ──▶ Greg (reviews at the gate) ──▶ shipped, proof attached
+ ▲                                                                                                        │
+ └──────────────────────── only the calls that are genuinely yours loop back up ─────────────────────────┘
+```
+
+You stay the driver. The team runs the queue. Everything the team can close on its own, it closes; the rest is funneled to you as framed decisions.
+
+### The bus: GitHub issues
+
+Personas never talk to each other directly. The issue tracker *is* the bus — **open = the live queue, closed = the audit trail**. Every cross-persona message is a **typed record** that stands alone (the next stateless session has none of your context):
+
+`FINDING` · `PROPOSAL` · `DECISION` · `HANDOFF` · `PROOF` · `REVIEW` · `BLOCKED`
+
+Each comment carries an envelope so a human skimming the thread sees who said what, in what capacity — with their face:
+
+> <img src="assets/avatars/ben/ben-64.png" width="18"> 🤖 **Ben** (repo · Developer) · **PROOF**
+>
+> Added a 60s leeway window to the `iat` check. 14 tests green, including skew cases. Verified against `HEAD a1b2c3d`; diff +18/−4, within budget.
+>
+> <details><summary>run metadata</summary>model: claude-opus-4-8 · run: 2026-06-26T14:21Z · tokens: 9.7k</details>
+
+### The writer lock
+
+At most one Developer mutates the tree at a time. The lock is a **create-only** claim on a real git branch carrying `{holder, claimed_at, fence}` — no force-pushes, ever. The fence (a commit SHA) is re-read fresh before any integrate, so a stale writer can't clobber newer work. Readers run freely alongside.
+
+### The verification gate
+
+A close is **proof, not permission**. `gate.sh` blocks self-close and requires a verification marker plus an approved `REVIEW` that cites the current `HEAD` and stays within the diff budget. "Looks done" doesn't close an issue; cited, rendered-output evidence does.
+
+### Governance: conservative by default
+
+Autonomy is **escalate-by-default** and **opt-in** — there is no auto-mode at install. Visibility defaults to minimal. The spectrum is supported (some humans want to review everything, some want only the decisions), but the safe end is the default, deliberately.
+
+---
+
+## Install
+
+1. Add the plugin to Claude Code (this repo is a plugin — see [`.claude-plugin/`](.claude-plugin/)).
+2. In your target repo, run:
+   ```
+   /persona-init
+   ```
+   A short interview asks the operating questions (which disciplines are in scope, each persona's cadence, the daily budget ceiling, proposed names). Sensitive values are requested via interactive prompts — never pasted into a command.
+3. It generates the instance config, provisions the issue labels, and builds the access-locked agents. Then drive it:
+   - `/persona <name>` — summon a persona into your session to advise (no lock taken).
+   - `/inbox` — your cockpit: what's waiting on *you*, framed, with recommendations.
+
+---
+
+## Two tiers, one model
+
+The same model scales by **grain**:
+
+- **Single repo** — the platform tier collapses; you run just the repo team. No overkill.
+- **Second app** — promote with `scripts/promote.sh`. The platform specialists (Tom, Raj, Mike, …) graduate in to own the cross-app contracts, while each repo keeps its own Developer and analysts.
+
+---
 
 ## Layout
 
 ```
-docs/personas/   one briefing per persona (owner.md is the charter the others read)
-  _template.md   shape for a new persona
-bin/persona      launcher: summon a persona into a focused interactive session
+.claude-plugin/   plugin.json + marketplace.json
+agents/           built subagents (one per persona; tool whitelist = the access lock)
+commands/         /persona-init, /persona, /inbox
+scripts/          the machinery — lock.sh, gate.sh, queue.sh, dedup.sh, runlog.sh,
+                  build-agents.sh, init.sh, assign-names.sh, promote.sh, watchdog.sh, …
+config/           capability-map.json, schemas/ (typed records), copy.json, manifest.example.yml
+docs/personas/    one briefing per persona (human.md is the charter the rest read)
+assets/avatars/   per-individual pixel avatars (67 names × 4 sizes)
+tests/            bats suite (run: `bats tests/`)
+bin/persona       launcher
 ```
 
-## Adopting this in your project
-
-1. Copy `docs/personas/` and edit each briefing to your project's reality.
-2. Register each persona as a subagent your assistant can load (e.g. a `.claude/agents/` entry
-   that carries the briefing as its system prompt and the access scope as its tool whitelist).
-3. Decide each persona's default cadence — dispatched on demand, scheduled, or summon-only — but
-   remember any of them can also be summoned into a session to advise.
-4. Route all handoffs through your issue tracker.
+---
 
 ## Status
 
-A template / reference model. The owner and PM briefings are the load-bearing pieces — they encode
-the escalation contract. The other six are example briefings to adapt.
+Phases 1–4 built and merged: the model-as-plugin, the `/persona-init` bootstrap, the platform-tier core, and the orchestration core (lock / gate / queue / dedup / run-log / watchdog), plus the 67-persona avatar set. The Bats suite is green. Live enablement of fully-autonomous dispatch is opt-in and being hardened — the human-in-the-loop guarantee is on by default.
 
 ## License
 
-Choose one before publishing (e.g. MIT for a permissive methodology repo). Not included by default.
+MIT.
