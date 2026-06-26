@@ -18,6 +18,12 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG"; }
   grep -q -- "--body" "$PL_GH_LOG" && grep -q "FINDING" "$PL_GH_LOG"
 }
 
+@test "queue file: envelope embeds the persona avatar img" {
+  run scripts/queue.sh file --persona "Ben" --tier "finances Team · Developer" --type FINDING --title t --body b
+  [ "$status" -eq 0 ]
+  grep -q "avatars/ben/ben-64.png" "$PL_GH_LOG"
+}
+
 @test "queue comment: appends an enveloped comment to an issue" {
   run scripts/queue.sh comment 42 --persona Ben --tier "finances Team · Developer" --type PROOF --body "fixed"
   [ "$status" -eq 0 ]; grep -q "issue comment 42" "$PL_GH_LOG"
