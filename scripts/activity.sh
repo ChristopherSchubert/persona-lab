@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # activity.sh — render the activity timeline as a self-contained HTML file.
+# v2: noise suppression, plain-English sentences, issue grouping.
 # Reads all *.ndjson under $PL_RUNS (default $(pl_config_dir)/runs),
-# sorts by .ts, and emits a chronological HTML table.
+# sorts by .ts, and emits a grouped HTML timeline.
 #
 # Usage:
 #   scripts/activity.sh [--out FILE] [--persona SLUG] [--since ISO8601_TS]
@@ -88,8 +89,115 @@ def fmt_ts:
   end;
 
 # -----------------------------------------------------------------------
-# Total tokens across all records
-(map(.cost_tokens // 0) | add // 0) as $total_tokens |
+# Suppression predicate (Laura v2 spec):
+# Keep a record only when all three hold:
+#   1. persona != "system"
+#   2. action != "bus:quarantine"
+#   3. NOT (cost_tokens==0 AND action=="bus:comment" AND role is blank/absent)
+def is_meaningful:
+  .persona != "system"
+  and .action != "bus:quarantine"
+  and ((.cost_tokens == 0 and .action == "bus:comment" and ((.role // "") == "")) | not);
+
+# -----------------------------------------------------------------------
+# Action → plain-English sentence fragment.
+# Returns the verb+object string (persona name is prepended by the caller).
+# Outcome is used for summon-with-no-action disambiguation.
+def action_sentence($action; $trigger; $outcome; $issue_number; $artifact_url; $url_is_safe):
+  if $action == "bus:comment" then
+    if $issue_number != null then
+      "commented on issue " +
+      if ($url_is_safe and ($issue_number != null)) then
+        "<a href=\"" + ($artifact_url | @html) + "\">#" + ($issue_number | tostring | @html) + "</a>"
+      else
+        "#" + ($issue_number | tostring | @html)
+      end
+    else
+      "commented"
+    end
+  elif $action == "bus:park" then
+    "parked issue " +
+    if ($url_is_safe and ($issue_number != null)) then
+      "<a href=\"" + ($artifact_url | @html) + "\">#" + ($issue_number | tostring | @html) + "</a>"
+    else
+      "#" + ($issue_number | tostring | @html)
+    end + " for later"
+  elif $action == "build" then
+    "ran a build"
+  elif ($action == "" or $action == null) and $trigger == "summon" then
+    if $outcome == "error" then "encountered an error"
+    elif $outcome == "complete" then "completed work"
+    else "picked up work"
+    end
+  else
+    # Unknown code: render in <code> so the gap surfaces, but row still shows
+    "performed <code>" + ($action | @html) + "</code>"
+  end;
+
+# -----------------------------------------------------------------------
+# Outcome note: appended after em-dash only when it adds info
+def outcome_note($outcome; $action):
+  if $outcome == "error" then " — failed"
+  elif $outcome == "acted" then " — further action needed"
+  elif $outcome == "pending" then " — in progress"
+  elif $outcome == "complete" and ($action != "bus:comment" and $action != "build") then ""
+  else ""
+  end;
+
+# -----------------------------------------------------------------------
+# Render a single timeline row (either primary or suppressed)
+def render_row($rec; $row_class):
+  ($rec.persona // "") as $persona |
+  ($persona | persona_slug) as $slug |
+  ($slug | avatar_url) as $avatar |
+  ($rec.outcome // "pending") as $outcome |
+  ($outcome | outcome_color) as $color |
+  ($outcome | outcome_label) as $label |
+  ($rec.ts // "" | fmt_ts) as $ts |
+  ($rec.action // "") as $action |
+  ($rec.trigger // "") as $trigger |
+  ($rec.role // "") as $role |
+  ($rec.issue_number) as $issue_number |
+  ($rec.artifact_url // "") as $raw_artifact_url |
+  ($raw_artifact_url | startswith("https://")) as $url_is_safe |
+  ($avatar | @html) as $safe_avatar |
+  ($persona | @html) as $safe_persona |
+  ($ts | @html) as $safe_ts |
+  ($label | @html) as $safe_label |
+  ($role | @html) as $safe_role |
+  # First letter of persona name for initials fallback
+  (if ($persona | length) > 0 then $persona[0:1] | ascii_upcase else "?" end) as $initial |
+  action_sentence($action; $trigger; $outcome; $issue_number; $raw_artifact_url; $url_is_safe) as $sentence |
+  outcome_note($outcome; $action) as $note |
+  "<tr class=\"\($row_class)\">
+    <td class=\"ts\">\($safe_ts)</td>
+    <td class=\"persona\">
+      <div class=\"persona-inner\">
+        <span class=\"avatar-wrap\">
+          <img class=\"avatar\" src=\"\($safe_avatar)\" alt=\"\" onerror=\"this.parentElement.classList.add(&#39;img-err&#39;)\" loading=\"lazy\">
+          <span class=\"avatar-initials\" aria-hidden=\"true\">\($initial)</span>
+        </span>
+        <div>
+          <span class=\"persona-name\">\($safe_persona)</span>
+          <span class=\"sentence\"> \($sentence)\($note)</span>
+          \(if $safe_role != "" then "<span class=\"persona-role\">\($safe_role)</span>" else "" end)
+        </div>
+      </div>
+    </td>
+    <td><span class=\"chip\" style=\"background:\($color)\">\($safe_label)</span></td>
+  </tr>";
+
+# -----------------------------------------------------------------------
+# Split into meaningful and suppressed
+. as $all |
+[ .[] | select(is_meaningful) ] as $meaningful |
+[ .[] | select(is_meaningful | not) ] as $suppressed |
+($meaningful | length) as $m_count |
+($all | length) as $total_count |
+($meaningful | map(.cost_tokens // 0) | add // 0) as $total_tokens |
+
+# Group meaningful records by issue_number (null → Infrastructure)
+($meaningful | group_by(.issue_number)) as $groups |
 
 # -----------------------------------------------------------------------
 # HTML preamble
@@ -111,6 +219,23 @@ def fmt_ts:
   }
   h1 { font-size: 20px; font-weight: 700; margin-bottom: 20px; color: #f8fafc; letter-spacing: -0.01em; }
   h1 span { color: #64748b; font-weight: 400; font-size: 14px; margin-left: 8px; }
+  .issue-card {
+    margin-bottom: 24px;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .issue-heading {
+    background: #1e293b;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #94a3b8;
+    border-bottom: 1px solid #334155;
+  }
+  .issue-heading a { color: #60a5fa; text-decoration: none; }
+  .issue-heading a:hover { text-decoration: underline; }
+  .issue-heading .issue-label { color: #64748b; font-weight: 400; margin-left: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
   table { width: 100%; border-collapse: collapse; }
   thead th {
     background: #1e293b;
@@ -130,20 +255,38 @@ def fmt_ts:
   td.ts { color: #64748b; white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 12px; }
   td.persona { white-space: nowrap; }
   .persona-inner { display: flex; align-items: center; gap: 8px; }
+  .avatar-wrap {
+    position: relative; width: 28px; height: 28px; flex-shrink: 0;
+  }
   .avatar {
     width: 28px; height: 28px; border-radius: 50%;
-    object-fit: cover; flex-shrink: 0;
+    object-fit: cover;
     background: #334155;
   }
+  .avatar-initials {
+    position: absolute; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: #334155;
+    color: #94a3b8;
+    font-size: 12px; font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+  }
+  /* When onerror adds .img-err to .avatar-wrap, hide img and show initials */
+  .avatar-wrap.img-err .avatar { visibility: hidden; }
+  .avatar-wrap.img-err .avatar-initials { display: flex; }
   .persona-name { font-weight: 500; color: #f1f5f9; }
-  td.action { color: #94a3b8; font-size: 12px; font-family: ui-monospace, SFMono-Regular, monospace; }
+  .sentence { color: #cbd5e1; }
+  .sentence a { color: #60a5fa; text-decoration: none; }
+  .sentence a:hover { text-decoration: underline; }
+  .sentence code { font-family: ui-monospace, SFMono-Regular, monospace; background: #1e293b; padding: 1px 4px; border-radius: 3px; font-size: 11px; color: #fbbf24; }
+  .persona-role { display: block; color: #64748b; font-size: 11px; margin-top: 2px; }
   .chip {
     display: inline-block; padding: 2px 8px; border-radius: 999px;
     font-size: 11px; font-weight: 600; color: #0f172a;
   }
-  td.artifact a { color: #60a5fa; text-decoration: none; font-size: 12px; }
-  td.artifact a:hover { text-decoration: underline; }
-  td.tokens { text-align: right; color: #64748b; font-size: 12px; font-variant-numeric: tabular-nums; }
   tfoot td {
     padding: 12px;
     border-top: 2px solid #334155;
@@ -153,83 +296,100 @@ def fmt_ts:
   tfoot .total-label { color: #64748b; }
   tfoot .total-value { color: #f1f5f9; font-weight: 600; font-variant-numeric: tabular-nums; }
   .empty { text-align: center; padding: 48px; color: #475569; }
+  /* Show-all toggle — CSS only, no JS */
+  details { margin-top: 32px; }
+  details summary {
+    cursor: pointer;
+    color: #64748b;
+    font-size: 12px;
+    padding: 8px 0;
+    user-select: none;
+    list-style: none;
+  }
+  details summary::before { content: \"▶  \"; font-size: 10px; }
+  details[open] summary::before { content: \"▼  \"; }
+  details summary::-webkit-details-marker { display: none; }
+  tr.row.suppressed td { color: #475569; font-style: italic; opacity: 0.6; }
+  tr.row.suppressed .persona-name { color: #475569; }
+  tr.row.suppressed .chip { opacity: 0.5; }
+  .infra-heading {
+    background: #0f172a;
+    padding: 10px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    border-bottom: 1px solid #1e293b;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
 </style>
 </head>
 <body>
-<h1>Activity Timeline <span>" + (length | tostring) + " records</span></h1>
-<table>
-<thead>
-  <tr>
-    <th>Time (UTC)</th>
-    <th>Persona</th>
-    <th>Action</th>
-    <th>Outcome</th>
-    <th>Artifact</th>
-    <th style=\"text-align:right\">Tokens</th>
-  </tr>
-</thead>
-<tbody>",
+<h1>Activity Timeline <span>" + ($m_count | tostring) + " events (" + ($total_count | tostring) + " total)</span></h1>",
 
-# One row per record
+# -----------------------------------------------------------------------
+# Primary content — grouped by issue
 (
-  if length == 0 then
-    "<tr><td colspan=\"6\" class=\"empty\">No activity records found.</td></tr>"
+  if $m_count == 0 then
+    "<p class=\"empty\">No meaningful activity records found.</p>"
   else
-    .[] |
-    . as $rec |
-    ($rec.persona // "") as $persona |
-    ($persona | persona_slug) as $slug |
-    ($slug | avatar_url) as $avatar |
-    ($rec.outcome // "pending") as $outcome |
-    ($outcome | outcome_color) as $color |
-    ($outcome | outcome_label) as $label |
-    ($rec.ts // "" | fmt_ts) as $ts |
-    ($rec.action // $rec.trigger // "") as $action |
-    ($rec.cost_tokens // 0) as $tok |
-    # Escape all values that will be interpolated into HTML text content or
-    # attribute values.  @html encodes <, >, &, " and apostrophe -- sufficient
-    # for both contexts.
-    ($rec.artifact_url // "") as $raw_artifact_url |
-    ($raw_artifact_url | @html) as $safe_artifact_url |
-    # Only https:// URLs may become clickable anchors.  @html alone would still
-    # leave a live javascript:/data: link, so validate the scheme too.
-    ($raw_artifact_url | startswith("https://")) as $url_is_safe |
-    ($avatar | @html) as $safe_avatar |
-    ($persona | @html) as $safe_persona |
-    ($action | @html) as $safe_action |
-    ($ts | @html) as $safe_ts |
-    ($label | @html) as $safe_label |
+    # Separate issue groups from non-issue records
+    [ $groups[] | select(.[0].issue_number != null) ] as $issue_groups |
+    [ $meaningful[] | select(.issue_number == null) ] as $infra_records |
+
+    # Render each issue card (one card per distinct issue_number)
     (
-      if $url_is_safe and ($rec.issue_number != null) then
-        "<a href=\"" + $safe_artifact_url + "\">#" + ($rec.issue_number | tostring) + "</a>"
-      elif $url_is_safe then
-        "<a href=\"" + $safe_artifact_url + "\">" + $safe_artifact_url + "</a>"
-      elif ($raw_artifact_url != "") then
-        # Non-https URL: render inert, escaped text — never a clickable link.
-        $safe_artifact_url
+      $issue_groups[] |
+      . as $group |
+      ($group[0].issue_number) as $inum |
+      ($group[0].artifact_url // "") as $issue_url |
+      ($issue_url | startswith("https://")) as $issue_url_safe |
+      "<div class=\"issue-card\"><div class=\"issue-heading\">" +
+      (if $issue_url_safe then
+        "<a href=\"" + ($issue_url | @html) + "\">#" + ($inum | tostring | @html) + "</a>"
+      else
+        "#" + ($inum | tostring | @html)
+      end) +
+      "<span class=\"issue-label\">issue</span></div>" +
+      "<table><tbody>" +
+      ($group | map(render_row(.; "row")) | join("")) +
+      "</tbody></table></div>"
+    ),
+
+    # Infrastructure section (no issue_number) — one card for all infra records
+    (
+      if ($infra_records | length) > 0 then
+        "<div class=\"issue-card\"><div class=\"infra-heading\">Infrastructure</div>" +
+        "<table><tbody>" +
+        ($infra_records | map(render_row(.; "row")) | join("")) +
+        "</tbody></table></div>"
       else ""
       end
-    ) as $artifact_html |
-    "<tr class=\"row\">
-      <td class=\"ts\">" + $safe_ts + "</td>
-      <td class=\"persona\"><div class=\"persona-inner\"><img class=\"avatar\" src=\"" + $safe_avatar + "\" alt=\"\" onerror=\"this.style.display=&#39;none&#39;\" loading=\"lazy\"><span class=\"persona-name\">" + $safe_persona + "</span></div></td>
-      <td class=\"action\">" + $safe_action + "</td>
-      <td><span class=\"chip\" style=\"background:" + $color + "\">" + $safe_label + "</span></td>
-      <td class=\"artifact\">" + $artifact_html + "</td>
-      <td class=\"tokens\">" + ($tok | tostring) + "</td>
-    </tr>"
+    )
   end
 ),
 
-"</tbody>
-<tfoot>
-  <tr>
-    <td colspan=\"5\" class=\"total-label\">Total tokens</td>
-    <td class=\"tokens total-value\">" + ($total_tokens | tostring) + "</td>
-  </tr>
-</tfoot>
-</table>
-</body>
+# Token footer (meaningful records only)
+"<table style=\"margin-top:16px\"><tfoot><tr>
+  <td colspan=\"3\" class=\"total-label\">Total tokens (meaningful events)</td>
+  <td class=\"ts total-value\">" + ($total_tokens | tostring) + "</td>
+</tr></tfoot></table>",
+
+# -----------------------------------------------------------------------
+# Show-all toggle — CSS/details, no JS dependency
+(
+  if ($suppressed | length) > 0 then
+    "<details><summary>Show all " + ($total_count | tostring) + " records (includes " + (($suppressed | length) | tostring) + " suppressed)</summary>" +
+    "<div class=\"issue-card\" style=\"margin-top:12px\"><table><thead><tr>" +
+    "<th>Time (UTC)</th><th>Persona / Action</th><th>Outcome</th>" +
+    "</tr></thead><tbody>" +
+    ($suppressed | map(render_row(.; "row suppressed")) | join("")) +
+    "</tbody></table></div></details>"
+  else ""
+  end
+),
+
+"</body>
 </html>"
 ')"
 
