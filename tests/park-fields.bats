@@ -1,8 +1,13 @@
 setup() {
   export PL_TEST_BIN="$(mktemp -d)"; export PATH="$PL_TEST_BIN:$PATH"
-  # Minimal gh stub: log all calls, return canned body for issue view
+  # Minimal gh stub: log all calls.
+  # Body vs comments are intentionally separate so the tests can verify
+  # that the read path uses --json comments (not the bare issue body).
+  #   PL_ISSUE_BODY_FILE     — returned by "gh issue view" WITHOUT --json flag
+  #   PL_ISSUE_COMMENTS_FILE — returned by "gh issue view --json comments ..."
   export PL_GH_LOG="$(mktemp)"
   export PL_ISSUE_BODY_FILE="$(mktemp)"
+  export PL_ISSUE_COMMENTS_FILE="$(mktemp)"
   cat > "$PL_TEST_BIN/gh" <<'SH'
 #!/usr/bin/env bash
 echo "GH $*" >> "$PL_GH_LOG"
@@ -11,16 +16,20 @@ case "$1 $2" in
   "issue comment") echo "ok";;
   "issue edit")   echo "ok";;
   "issue view")
-    # return canned body from PL_ISSUE_BODY_FILE
-    if [ -f "$PL_ISSUE_BODY_FILE" ]; then
-      cat "$PL_ISSUE_BODY_FILE"
+    # Distinguish body-only vs comment-fetching calls.
+    # Any invocation that passes --json and includes "comments" in the args
+    # returns the comments fixture; otherwise returns the bare body fixture.
+    if printf '%s\n' "$@" | grep -q -- '--json'; then
+      if [ -f "$PL_ISSUE_COMMENTS_FILE" ]; then cat "$PL_ISSUE_COMMENTS_FILE"; fi
+    else
+      if [ -f "$PL_ISSUE_BODY_FILE" ]; then cat "$PL_ISSUE_BODY_FILE"; fi
     fi
     ;;
 esac
 SH
   chmod +x "$PL_TEST_BIN/gh"
 }
-teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE"; }
+teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE" "$PL_ISSUE_COMMENTS_FILE"; }
 
 # ---------------------------------------------------------------------------
 # park sub-verb: required fields guard
@@ -198,8 +207,9 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE"; }
 # ---------------------------------------------------------------------------
 
 @test "resume: succeeds with --resolution" {
+  # pl-fields live in a comment, not the issue body — write to the comments fixture
   printf '<!-- pl-fields\n{"blocker_type":"dependency","owner":"Tom","deadline":"2026-07-10","unblocking_ask":"Deploy"}\n-->\n' \
-    > "$PL_ISSUE_BODY_FILE"
+    > "$PL_ISSUE_COMMENTS_FILE"
   run scripts/queue.sh resume 42 \
     --resolution "Upstream service deployed at 14:00Z"
   [ "$status" -eq 0 ]
@@ -207,7 +217,7 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE"; }
 
 @test "resume: embeds HANDOFF comment with resolution" {
   printf '<!-- pl-fields\n{"blocker_type":"dependency","owner":"Tom","deadline":"2026-07-10","unblocking_ask":"Deploy"}\n-->\n' \
-    > "$PL_ISSUE_BODY_FILE"
+    > "$PL_ISSUE_COMMENTS_FILE"
   run scripts/queue.sh resume 42 \
     --resolution "Upstream service deployed"
   [ "$status" -eq 0 ]
@@ -216,9 +226,9 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE"; }
 }
 
 @test "resume: removes blocked-by:<type> label (reads blocker_type from pl-fields)" {
-  # Stub gh issue view to return a body with a pl-fields block
+  # pl-fields are written to a comment by park; read path must use --json comments
   printf '<!-- pl-fields\n{"blocker_type":"dependency","owner":"Tom","deadline":"2026-07-10","unblocking_ask":"Deploy"}\n-->\n' \
-    > "$PL_ISSUE_BODY_FILE"
+    > "$PL_ISSUE_COMMENTS_FILE"
   run scripts/queue.sh resume 42 \
     --resolution "Blocker cleared"
   [ "$status" -eq 0 ]
@@ -233,7 +243,7 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE"; }
 
 @test "resume: --repo flag is forwarded" {
   printf '<!-- pl-fields\n{"blocker_type":"dependency","owner":"Tom","deadline":"2026-07-10","unblocking_ask":"Deploy"}\n-->\n' \
-    > "$PL_ISSUE_BODY_FILE"
+    > "$PL_ISSUE_COMMENTS_FILE"
   run scripts/queue.sh resume 42 --repo o/r \
     --resolution "Cleared"
   [ "$status" -eq 0 ]
@@ -244,10 +254,10 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE"; }
 # fields sub-verb: read path — parses pl-fields JSON block from issue body
 # ---------------------------------------------------------------------------
 
-@test "fields: extracts pl-fields JSON from issue body" {
-  # Write a canned body that contains a pl-fields block
+@test "fields: extracts pl-fields JSON from issue comments" {
+  # pl-fields are written to comments by park/quarantine; read must use --json comments
   printf '<!-- pl-fields\n{"owner":"Tom","deadline":"2026-07-10","blocker_type":"dependency","unblocking_ask":"Deploy"}\n-->\n' \
-    > "$PL_ISSUE_BODY_FILE"
+    > "$PL_ISSUE_COMMENTS_FILE"
   run scripts/queue.sh fields 42
   [ "$status" -eq 0 ]
   [[ "$output" == *'"owner"'* ]]
@@ -264,8 +274,128 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE"; }
 }
 
 @test "fields: --repo flag is forwarded to gh issue view" {
-  printf '<!-- pl-fields\n{"owner":"PM"}\n-->\n' > "$PL_ISSUE_BODY_FILE"
+  printf '<!-- pl-fields\n{"owner":"PM"}\n-->\n' > "$PL_ISSUE_COMMENTS_FILE"
   run scripts/queue.sh fields 42 --repo o/r
   [ "$status" -eq 0 ]
   grep -q -- "--repo o/r" "$PL_GH_LOG"
+}
+
+# ---------------------------------------------------------------------------
+# Regression — Bug 1: read path must use --json comments, not bare issue body
+# ---------------------------------------------------------------------------
+
+@test "fields: fails when pl-fields block is in comments but read uses bare body" {
+  # Put pl-fields ONLY in comments fixture (body is empty).
+  # If the read path incorrectly uses "gh issue view" without --json comments it
+  # will see an empty body and must return a non-zero exit — proving the masking
+  # was real and the fix now routes through the correct path.
+  : > "$PL_ISSUE_BODY_FILE"   # empty body — no pl-fields here
+  printf '<!-- pl-fields\n{"owner":"Tom","blocker_type":"dependency","deadline":"2026-07-10","unblocking_ask":"Deploy"}\n-->\n' \
+    > "$PL_ISSUE_COMMENTS_FILE"
+  # Correct implementation reads comments → exit 0 with JSON output.
+  run scripts/queue.sh fields 42
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"owner"'* ]]
+}
+
+@test "resume: fails when pl-fields block is only in issue body (not comments)" {
+  # Put pl-fields ONLY in the body fixture (not comments).
+  # A correct implementation reads comments and must fail to find the block here.
+  printf '<!-- pl-fields\n{"blocker_type":"dependency","owner":"Tom","deadline":"2026-07-10","unblocking_ask":"Deploy"}\n-->\n' \
+    > "$PL_ISSUE_BODY_FILE"
+  : > "$PL_ISSUE_COMMENTS_FILE"   # empty comments
+  run scripts/queue.sh resume 42 --resolution "Cleared"
+  # pl-fields not in comments → must fail (not find the block)
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"pl-fields"* ]] || [[ "${lines[*]}" == *"pl-fields"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# Regression — Bug 2: field values with " or \ must produce valid JSON
+# ---------------------------------------------------------------------------
+
+@test "park: field value containing double-quote produces valid JSON" {
+  # Use a wrapper script to capture the --body arg passed to "gh issue comment"
+  PL_BODY_CAP="$(mktemp)"
+  export PL_BODY_CAP
+  # Write a capturing stub that replaces the setup stub for this test
+  cat > "$PL_TEST_BIN/gh" <<'SH2'
+#!/usr/bin/env bash
+echo "GH $*" >> "$PL_GH_LOG"
+# Capture the --body value when this is a comment call
+if [ "$1 $2" = "issue comment" ]; then
+  args=("$@"); i=0
+  while [ $i -lt ${#args[@]} ]; do
+    if [ "${args[$i]}" = "--body" ]; then
+      printf '%s' "${args[$((i+1))]}" > "$PL_BODY_CAP"
+      break
+    fi
+    i=$((i+1))
+  done
+fi
+case "$1 $2" in
+  "issue create") echo "https://github.com/o/r/issues/42";;
+  "issue comment") echo "ok";;
+  "issue edit")   echo "ok";;
+  "issue view")
+    if printf '%s\n' "$@" | grep -q -- '--json'; then
+      if [ -f "$PL_ISSUE_COMMENTS_FILE" ]; then cat "$PL_ISSUE_COMMENTS_FILE"; fi
+    else
+      if [ -f "$PL_ISSUE_BODY_FILE" ]; then cat "$PL_ISSUE_BODY_FILE"; fi
+    fi
+    ;;
+esac
+SH2
+  chmod +x "$PL_TEST_BIN/gh"
+  run scripts/queue.sh park 42 \
+    --blocker-type dependency \
+    --owner 'Tom "the architect" Jones' \
+    --deadline "2026-07-10" \
+    --unblocking-ask 'Deploy the service (uses 8080 by "default")'
+  [ "$status" -eq 0 ]
+  # Extract the JSON line from the captured comment body
+  json_block="$(awk '/^<!-- pl-fields$/{found=1;next} found && /^-->/{exit} found' "$PL_BODY_CAP")"
+  # Must be non-empty and parse as valid JSON
+  [ -n "$json_block" ]
+  printf '%s' "$json_block" | jq -e . > /dev/null
+}
+
+@test "quarantine: field value containing double-quote produces valid JSON" {
+  PL_BODY_CAP="$(mktemp)"
+  export PL_BODY_CAP
+  cat > "$PL_TEST_BIN/gh" <<'SH2'
+#!/usr/bin/env bash
+echo "GH $*" >> "$PL_GH_LOG"
+if [ "$1 $2" = "issue comment" ]; then
+  args=("$@"); i=0
+  while [ $i -lt ${#args[@]} ]; do
+    if [ "${args[$i]}" = "--body" ]; then
+      printf '%s' "${args[$((i+1))]}" > "$PL_BODY_CAP"
+      break
+    fi
+    i=$((i+1))
+  done
+fi
+case "$1 $2" in
+  "issue create") echo "https://github.com/o/r/issues/42";;
+  "issue comment") echo "ok";;
+  "issue edit")   echo "ok";;
+  "issue view")
+    if printf '%s\n' "$@" | grep -q -- '--json'; then
+      if [ -f "$PL_ISSUE_COMMENTS_FILE" ]; then cat "$PL_ISSUE_COMMENTS_FILE"; fi
+    else
+      if [ -f "$PL_ISSUE_BODY_FILE" ]; then cat "$PL_ISSUE_BODY_FILE"; fi
+    fi
+    ;;
+esac
+SH2
+  chmod +x "$PL_TEST_BIN/gh"
+  run scripts/queue.sh quarantine 42 \
+    --owner 'PM "lead"' \
+    --deadline "2026-07-10" \
+    --origin 'external:"jira"'
+  [ "$status" -eq 0 ]
+  json_block="$(awk '/^<!-- pl-fields$/{found=1;next} found && /^-->/{exit} found' "$PL_BODY_CAP")"
+  [ -n "$json_block" ]
+  printf '%s' "$json_block" | jq -e . > /dev/null
 }
