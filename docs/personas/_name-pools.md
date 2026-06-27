@@ -1,9 +1,8 @@
 # Persona roster
 
-Each role has **exactly one person** — a fixed name, the same across every repo. A name is a
-**relationship handle**, layered on a role whose authority/access never changes (see the design spec,
-"Per-persona identity, voice & tone"). The human can rename anyone at any time — these are the
-proposed defaults.
+Each role has **exactly one person** — a fixed name, the same across every repo. Names are **fixed**,
+not renamed at runtime. A name is a stable identity layered on a role whose authority and access are
+set by the role, not the name.
 
 ## Rules
 - **One person per role** — one fixed name each, identical across all repos (no per-repo pools).
