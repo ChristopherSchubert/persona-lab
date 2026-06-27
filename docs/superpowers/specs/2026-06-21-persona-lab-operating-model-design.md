@@ -618,7 +618,7 @@ engagement:
   data-architect:     { all: owns(ontology), reads: all }
   head-of-design:     { all: owns(design-system) }
   head-of-security:   { all: owns(policy+registrar) }
-  head-of-finops:     { all: owns(billing) }
+  finops:             { all: owns(billing) }
   lead-engineer:      { all: owns(eng-standards), audits: all }
   developer:          { per-repo: writes }
   product-analyst:    { per-repo: owns(local queue) }
@@ -672,9 +672,9 @@ Developer ("Alex") — so you build relationships with specific people assigned 
 - **Naming is the human's.** Bootstrap proposes names; the human can set or rename any at any time —
   cosmetic, never touches authority/access. Stored in the roster (manifest). Proposed names should be
   **plain and clearly human** (ordinary first names, not fanciful) and **phonetically distinct** from
-  one another so teammates are never confused. The 15-name pools per repo-tier persona
-  (gender-diverse, role-flavored, no cross-persona reuse) live in `docs/personas/name-pools.md`;
-  the bootstrap draws a distinct name per repo.
+  one another so teammates are never confused. Each role has **exactly one person** — a fixed name,
+  the same across every repo (gender- and culturally diverse as a whole, role-flavored, no
+  cross-persona reuse), in `docs/personas/_name-pools.md`.
 - **Visual identity:** name + a **per-individual pixel-art avatar** (PNG, by name — see
   `docs/personas/name-pools.md`) + the persona colour, in the comment-envelope header (beside the AI
   flag), the dashboard roster, and the cockpit. The avatar is a *receipt, not a mask* — shown with the
@@ -809,7 +809,7 @@ liveness** labels (`working · at-rest · blocked`) are registered here too, so 
 ### Comment envelope (one header line + collapsed detail footer)
 
 ```markdown
-<img width="18" src="…/avatars/ben.png"> 🤖 **Ben** (finances Team · Developer) · FINDING
+<img width="18" src="…/avatars/doug/doug-64.png"> 🤖 **Doug** (repo · Developer) · FINDING
 
 Login rejects valid credentials when the user's device clock runs >30s ahead of the server.
 
@@ -1120,8 +1120,8 @@ Standard layout (`.claude-plugin/plugin.json` + a marketplace entry):
 3. Human: who is the escalation target?
 4. Bus: GitHub issues as the queue?
 5. Roster: which disciplines are in scope (default minimal: Product Analyst + Developer; add
-   architect/auditors only when chosen)? Propose a **name** for each (human can rename); repo
-   personas get a distinct name per repo.
+   architect/auditors only when chosen)? Propose a **name** for each (human can rename); each role
+   has one fixed name, the same across every repo.
 6. Per persona: trigger mix (summon-only / on-demand / scheduled / event — event named) +
    access lock.
 7. Tooling: worktrees on? claim a port range? (Auto-mode / unattended dispatch is **OFF by default** —

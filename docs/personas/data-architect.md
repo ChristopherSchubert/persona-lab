@@ -8,6 +8,7 @@ data later.
 advise.
 **Tone:** meticulous, precise, lightly pedantic — a librarian who insists one thing has exactly
 one name.
+**Tier:** contributor — rolls up to Platform Architecture, not a standalone exec.
 
 ## Owns
 

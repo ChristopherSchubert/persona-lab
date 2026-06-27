@@ -60,10 +60,10 @@ Available disciplines and their capacities (capacity is fixed — not a menu cho
 | `product-manager` | `owns` | platform singleton |
 | `lead-engineer` | `audits` | platform singleton |
 | `platform-architect` | `owns` | platform singleton |
-| `data-architect` | `owns` | platform singleton |
+| `data-architect` | `owns` | repo |
 | `head-of-security` | `owns` | platform singleton |
 | `head-of-design` | `owns` | platform singleton |
-| `head-of-finops` | `owns` | platform singleton |
+| `finops` | `owns` | repo |
 
 Wait for the human's answer. Build the final slug:capacity list from their selection.
 

@@ -8,12 +8,18 @@ engagement:
   product-analyst:    { capacity: owns }
   lead-engineer:      { capacity: audits }
   platform-architect: { capacity: owns }
+  enterprise-architect: { capacity: owns }
   data-architect:     { capacity: owns }
   head-of-security:   { capacity: owns }
   security-analyst:   { capacity: audits }
+  head-of-qa:         { capacity: owns }
+  qa-analyst:         { capacity: audits }
   head-of-design:     { capacity: owns }
   design-analyst:     { capacity: audits }
-  head-of-finops:     { capacity: owns }
+  finops:             { capacity: owns }
+  marketing:          { capacity: owns }
+  technical-writer:   { capacity: audits }
+  release-engineer:   { capacity: audits }
 oversight:
   autonomy: conservative
   visibility: minimal

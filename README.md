@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/avatars/sarah/sarah-64.png" width="50" alt="Sarah">&nbsp;<img src="assets/avatars/greg/greg-64.png" width="50" alt="Greg">&nbsp;<img src="assets/avatars/tom/tom-64.png" width="50" alt="Tom">&nbsp;<img src="assets/avatars/raj/raj-64.png" width="50" alt="Raj">&nbsp;<img src="assets/avatars/mike/mike-64.png" width="50" alt="Mike">&nbsp;<img src="assets/avatars/laura/laura-64.png" width="50" alt="Laura">&nbsp;<img src="assets/avatars/dave/dave-64.png" width="50" alt="Dave">&nbsp;<img src="assets/avatars/ben/ben-64.png" width="50" alt="Ben">&nbsp;<img src="assets/avatars/zoe/zoe-64.png" width="50" alt="Zoe">&nbsp;<img src="assets/avatars/max/max-64.png" width="50" alt="Max">&nbsp;<img src="assets/avatars/esme/esme-64.png" width="50" alt="Esmé">
+<img src="assets/avatars/sarah/sarah-64.png" width="46" alt="Sarah">&nbsp;<img src="assets/avatars/greg/greg-64.png" width="46" alt="Greg">&nbsp;<img src="assets/avatars/tom/tom-64.png" width="46" alt="Tom">&nbsp;<img src="assets/avatars/eleanor/eleanor-64.png" width="46" alt="Eleanor">&nbsp;<img src="assets/avatars/raj/raj-64.png" width="46" alt="Raj">&nbsp;<img src="assets/avatars/mike/mike-64.png" width="46" alt="Mike">&nbsp;<img src="assets/avatars/priya/priya-64.png" width="46" alt="Priya">&nbsp;<img src="assets/avatars/laura/laura-64.png" width="46" alt="Laura">&nbsp;<img src="assets/avatars/dave/dave-64.png" width="46" alt="Dave">&nbsp;<img src="assets/avatars/carmen/carmen-64.png" width="46" alt="Carmen">&nbsp;<img src="assets/avatars/doug/doug-64.png" width="46" alt="Doug">&nbsp;<img src="assets/avatars/aisha/aisha-64.png" width="46" alt="Aisha">&nbsp;<img src="assets/avatars/hana/hana-64.png" width="46" alt="Hana">&nbsp;<img src="assets/avatars/lola/lola-64.png" width="46" alt="Lola">&nbsp;<img src="assets/avatars/pavel/pavel-64.png" width="46" alt="Pavel">&nbsp;<img src="assets/avatars/morgan/morgan-64.png" width="46" alt="Morgan">&nbsp;<img src="assets/avatars/mateo/mateo-64.png" width="46" alt="Mateo">
 
 # Persona Lab
 
@@ -28,28 +28,34 @@ Three ideas do the heavy lifting:
 
 ## Meet the team
 
-Two tiers. **Platform specialists** are singletons — one standing expert per discipline, working across all your repos. The **repo team** is instantiated per project, with names drawn from per-role pools, so your `finances` Developer is a different person from another repo's.
+**One person per role**, the same across every repo. Two groups: a **lead** directs a discipline that has a contributor under it; **contributors** are the specialists who do the work. A role only carries a lead title when there's a junior in that discipline to direct.
 
-### Platform tier
+### Leads
 
 | | Persona | Lens | Access |
 |:--:|---|---|:--:|
 | <img src="assets/avatars/sarah/sarah-64.png" width="44"> | **Sarah** · Product Manager | Grooms the queue, surfaces your decisions, audits closes | reader |
-| <img src="assets/avatars/greg/greg-64.png" width="44"> | **Greg** · Lead Engineer | Owns code review and the verification gate | reader |
-| <img src="assets/avatars/tom/tom-64.png" width="44"> | **Tom** · Platform Architect | Cross-app contracts, env topology, ADRs | reader |
-| <img src="assets/avatars/raj/raj-64.png" width="44"> | **Raj** · Data Architect | The shared data model / domain ontology | reader |
-| <img src="assets/avatars/mike/mike-64.png" width="44"> | **Mike** · Head of Security | Risk-first audits, rooted in real risk | auditor |
+| <img src="assets/avatars/greg/greg-64.png" width="44"> | **Greg** · Lead Engineer | Owns code review and the verification gate | auditor |
+| <img src="assets/avatars/tom/tom-64.png" width="44"> | **Tom** · Platform Architect | Cross-app contracts, env topology, ADRs — leads the architects | reader |
+| <img src="assets/avatars/mike/mike-64.png" width="44"> | **Mike** · Head of Security | Risk-first audits, rooted in real risk | reader |
+| <img src="assets/avatars/priya/priya-64.png" width="44"> | **Priya** · Head of QA | Test strategy and the quality bar | reader |
 | <img src="assets/avatars/laura/laura-64.png" width="44"> | **Laura** · Head of Design | UX and design-system coherence | reader |
-| <img src="assets/avatars/dave/dave-64.png" width="44"> | **Dave** · Head of FinOps | Guards the spend, per dollar and per token | reader |
 
-### Repo team — example: `finances`
+### Contributors
 
 | | Persona | Lens | Access |
 |:--:|---|---|:--:|
-| <img src="assets/avatars/ben/ben-64.png" width="44"> | **Ben** · Developer | Implements one issue end-to-end | **writer** |
-| <img src="assets/avatars/zoe/zoe-64.png" width="44"> | **Zoe** · Product Analyst | Triages the queue, writes acceptance criteria | reader |
-| <img src="assets/avatars/max/max-64.png" width="44"> | **Max** · Security Analyst | Scans diffs for real, exploitable risk | auditor |
-| <img src="assets/avatars/esme/esme-64.png" width="44"> | **Esmé** · Design Analyst | Checks UI against the design system | reader |
+| <img src="assets/avatars/doug/doug-64.png" width="44"> | **Doug** · Developer | Implements one issue end-to-end | **writer** |
+| <img src="assets/avatars/raj/raj-64.png" width="44"> | **Raj** · Data Architect | The shared data model / domain ontology | reader |
+| <img src="assets/avatars/eleanor/eleanor-64.png" width="44"> | **Eleanor** · Enterprise Architect | Integration & portability across substrates (GHES, GitLab, Jira) | reader |
+| <img src="assets/avatars/aisha/aisha-64.png" width="44"> | **Aisha** · Product Analyst | Triages the queue, writes acceptance criteria | reader |
+| <img src="assets/avatars/hana/hana-64.png" width="44"> | **Hana** · Security Analyst | Scans diffs for real, exploitable risk | auditor |
+| <img src="assets/avatars/lola/lola-64.png" width="44"> | **Lola** · Design Analyst | Checks UI against the design system | auditor |
+| <img src="assets/avatars/pavel/pavel-64.png" width="44"> | **Pavel** · QA Analyst | Verifies behavior against acceptance criteria | auditor |
+| <img src="assets/avatars/morgan/morgan-64.png" width="44"> | **Morgan** · Technical Writer | Keeps docs honest and in sync with the code | auditor |
+| <img src="assets/avatars/mateo/mateo-64.png" width="44"> | **Mateo** · Release Engineer | Branch/merge strategy, releases, CI/CD | auditor |
+| <img src="assets/avatars/dave/dave-64.png" width="44"> | **Dave** · FinOps | Guards the spend, per dollar and per token | reader |
+| <img src="assets/avatars/carmen/carmen-64.png" width="44"> | **Carmen** · Marketing | Positioning, naming, and go-to-market voice | reader |
 
 **Access** is the lock, not a personality trait:
 
@@ -66,7 +72,7 @@ Briefings live in [`docs/personas/`](docs/personas/); start from [`_template.md`
 ### The loop
 
 ```
-You ──▶ Sarah (files & grooms) ──▶ Ben (builds, holds the lock) ──▶ Greg (reviews at the gate) ──▶ shipped, proof attached
+You ──▶ Sarah (files & grooms) ──▶ Doug (builds, holds the lock) ──▶ Greg (reviews at the gate) ──▶ shipped, proof attached
  ▲                                                                                                        │
  └──────────────────────── only the calls that are genuinely yours loop back up ─────────────────────────┘
 ```
@@ -81,7 +87,7 @@ Personas never talk to each other directly. The issue tracker *is* the bus — *
 
 Each comment carries an envelope so a human skimming the thread sees who said what, in what capacity — with their face:
 
-> <img src="assets/avatars/ben/ben-64.png" width="18"> 🤖 **Ben** (repo · Developer) · **PROOF**
+> <img src="assets/avatars/doug/doug-64.png" width="18"> 🤖 **Doug** (repo · Developer) · **PROOF**
 >
 > Added a 60s leeway window to the `iat` check. 14 tests green, including skew cases. Verified against `HEAD a1b2c3d`; diff +18/−4, within budget.
 >
@@ -119,8 +125,8 @@ Autonomy is **escalate-by-default** and **opt-in** — there is no auto-mode at 
 
 The same model scales by **grain**:
 
-- **Single repo** — the platform tier collapses; you run just the repo team. No overkill.
-- **Second app** — promote with `scripts/promote.sh`. The platform specialists (Tom, Raj, Mike, …) graduate in to own the cross-app contracts, while each repo keeps its own Developer and analysts.
+- **Single repo** — the cross-app specialists collapse in; you run a lean team. No overkill.
+- **Second app** — promote with `scripts/promote.sh`. The cross-app specialists (Tom, Raj, Eleanor, Mike, …) own the contracts that span repos, while the repo team works each app.
 
 ---
 
@@ -134,7 +140,7 @@ scripts/          the machinery — lock.sh, gate.sh, queue.sh, dedup.sh, runlog
                   build-agents.sh, init.sh, assign-names.sh, promote.sh, watchdog.sh, …
 config/           capability-map.json, schemas/ (typed records), copy.json, manifest.example.yml
 docs/personas/    one briefing per persona (human.md is the charter the rest read)
-assets/avatars/   per-individual pixel avatars (67 names × 4 sizes)
+assets/avatars/   per-individual pixel avatars (one per persona, 4 sizes each)
 tests/            bats suite (run: `bats tests/`)
 bin/persona       launcher
 ```
@@ -143,7 +149,7 @@ bin/persona       launcher
 
 ## Status
 
-Phases 1–4 built and merged: the model-as-plugin, the `/persona-init` bootstrap, the platform-tier core, and the orchestration core (lock / gate / queue / dedup / run-log / watchdog), plus the 67-persona avatar set. The Bats suite is green. Live enablement of fully-autonomous dispatch is opt-in and being hardened — the human-in-the-loop guarantee is on by default.
+Phases 1–4 built and merged: the model-as-plugin, the `/persona-init` bootstrap, the platform-tier core, and the orchestration core (lock / gate / queue / dedup / run-log / watchdog), plus the per-persona avatar set. The Bats suite is green. Live enablement of fully-autonomous dispatch is opt-in and being hardened — the human-in-the-loop guarantee is on by default.
 
 ## License
 
