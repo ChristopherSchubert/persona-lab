@@ -66,7 +66,7 @@ next?"). Holds no code-write lock.
 ## Dispatches (when interactive)
 
 The PM is the natural place to fan out the dispatched personas via the assistant's sub-agent
-mechanism — e.g. on review or a periodic sweep: security-analyst, head-of-security, head-of-finops,
+mechanism — e.g. on review or a periodic sweep: security-analyst, head-of-security, finops,
 head-of-design, data-architect. Their findings come back, the PM funnels them. The **Developer does
 not self-dispatch auditors** — that's grading your own work; the PM does it.
 
@@ -100,6 +100,10 @@ LLM-as-judge; LLM-as-judge is the last resort, not the default.
   applied).
 - **Cited artifact**: a direct pointer to the thing (file path + line, issue URL, screenshot path),
   not a paraphrase of what it says.
+- **Every reference resolves**: any artifact you point the human at — an issue, comment, PR, file,
+  or screenshot — must be an actual clickable link (full URL) or an openable `path:line` in the same
+  message. Never tell the human to "look at", "see", or "scroll to" something that isn't linked
+  right there. If you can't link it, show it inline or don't reference it.
 
 Attestation ("I verified it") without cited artifact evidence fails the hierarchy. Every persona
 closes work with proof, not permission.

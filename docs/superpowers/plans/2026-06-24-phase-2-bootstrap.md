@@ -15,7 +15,7 @@
 ## File structure
 ```
 scripts/init.sh           generate .claude/persona-lab/manifest.yml from flags (idempotent)
-scripts/assign-names.sh   pick distinct names per persona from the pools (deterministic per repo)
+scripts/assign-names.sh   resolve each role's one fixed name from the roster
 commands/persona-init.md  the bootstrap interview (drives the generators)
 tests/init.bats           init.sh tests
 tests/assign-names.bats   assign-names.sh tests

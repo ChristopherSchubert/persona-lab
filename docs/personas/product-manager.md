@@ -61,7 +61,7 @@ next?"). Holds no code-write lock.
 ## Dispatches (when interactive)
 
 The PM is the natural place to fan out the dispatched personas via the assistant's sub-agent
-mechanism — e.g. on review or a periodic sweep: security-analyst, head-of-security, head-of-finops,
+mechanism — e.g. on review or a periodic sweep: security-analyst, head-of-security, finops,
 head-of-design, data-architect. Their findings come back, the PM funnels them. The **Developer does
 not self-dispatch auditors** — that's grading your own work; the PM does it.
 

@@ -54,6 +54,9 @@ engagement:
   platform-architect:
     capacity: owns
 
+  enterprise-architect:
+    capacity: owns
+
   data-architect:
     capacity: owns
 
@@ -63,14 +66,26 @@ engagement:
   security-analyst:
     capacity: audits
 
+  head-of-qa:
+    capacity: owns
+
+  qa-analyst:
+    capacity: audits
+
   head-of-design:
     capacity: owns
 
   design-analyst:
     capacity: audits
 
-  head-of-finops:
+  finops:
     capacity: owns
+
+  marketing:
+    capacity: owns
+
+  technical-writer:
+    capacity: audits
 
 # oversight: governance invariants that apply to every persona in every mode.
 oversight:

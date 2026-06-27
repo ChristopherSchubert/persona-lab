@@ -1,55 +1,51 @@
-# Persona name pools
+# Persona roster
 
-Names are a **relationship handle**, layered on a role whose authority/access never changes
-(see the design spec, "Per-persona identity, voice & tone"). The human can rename anyone at
-any time — these are proposed defaults.
+Each role has **exactly one person** — a fixed name, the same across every repo. A name is a
+**relationship handle**, layered on a role whose authority/access never changes (see the design spec,
+"Per-persona identity, voice & tone"). The human can rename anyone at any time — these are the
+proposed defaults.
 
 ## Rules
-- **Platform personas are singletons** — one fixed name each (no pool needed).
-- **Repo-tier personas are instantiated per repo**, so each has a **pool of 15**; the bootstrap
-  assigns a *distinct* name per repo (your `finances` Developer ≠ your `schubert-family` Developer).
-- Each pool is **gender-diverse**.
-- **No name is reused across personas** (a name belongs to exactly one persona's pool).
-- Names are **plain, clearly human, phonetically distinct** — and **flavored to the role**
-  (engineers plain/classic, product more modern, security serious, design stylish). All real
-  first names, none fanciful.
+- **One person per role** — one fixed name each, identical across all repos (no per-repo pools).
+- **No name is reused** across roles.
+- The roster is **gender- and culturally diverse as a whole**.
+- Names are **plain, clearly human, phonetically distinct**, and **flavored to the role**
+  (engineers plain/classic, product modern, security serious, design stylish). All real first names.
 
-## Platform personas (singletons)
+## Roster
 
 | Role | Name |
 |---|---|
 | Product Manager | Sarah |
 | Lead Engineer | Greg |
 | Platform Architect | Tom |
+| Enterprise Architect | Eleanor |
 | Data Architect | Raj |
 | Head of Security | Mike |
+| Head of QA | Priya |
 | Head of Design | Laura |
-| Head of FinOps | Dave |
+| FinOps | Dave |
+| Marketing | Carmen |
+| Developer | Doug |
+| Product Analyst | Aisha |
+| Security Analyst | Hana |
+| Design Analyst | Lola |
+| QA Analyst | Pavel |
+| Technical Writer | Morgan |
 
-## Repo-tier pools (15 each)
-
-### Developer — plain, classic, unflashy
-Ben · Brian · Scott · Doug · Neil · Carl · Wayne · Dennis · Susan · Linda · Carol · Janet · Diane · Nancy · Joan
-
-### Product Analyst — modern, cosmopolitan, a little more interesting
-Zoe · Maya · Naomi · Sofia · Aisha · Leah · Ines · Mateo · Diego · Theo · Kai · Nico · Bilal · Arjun · Quinn
-
-### Security Analyst — serious, strong, no-nonsense
-Max · Vince · Roman · Ivan · Yusuf · Cole · Reza · Hana · Nadia · Vera · Ingrid · Sloane · Greta · Drew · Reese
-
-### Design Analyst — stylish, creative (still real names)
-Esmé · Juno · Lola · Mira · Anouk · Stella · Margot · Luca · Remy · Felix · Jasper · Elio · Otis · Beau · Sasha
+Diversity of the group as a whole: 8 women, 7 men, 1 gender-neutral (Morgan); spanning Western,
+South Asian (Raj, Priya), Latino (Carmen, Lola), Slavic / Eastern-European (Pavel), MENA (Aisha),
+and East Asian (Hana).
 
 ## Avatars
 
-Each name has a **per-individual pixel-art avatar** at `assets/avatars/<name>.png` (lowercase, ASCII —
-Esmé → `esme.png`). One PNG per name (names are unique across the roster). Faces are flavored like the
+Each name has a **per-individual pixel-art avatar** under `assets/avatars/<name>/` (lowercase, ASCII —
+Esmé → `esme`). One avatar per name (names are unique across the roster). Faces are flavored like the
 names (engineers plain, product modern, security serious, design stylish).
 
 - **PNG, not SVG** — GitHub renders PNG in issue comments; raw SVG won't display.
 - Square, pixel-art, ~64–128px native so it stays crisp at 16–20px.
-- Referenced by **absolute raw URL** in the comment-envelope header (beside the AI flag), the dashboard
+- Referenced by **absolute URL** in the comment-envelope header (beside the AI flag), the dashboard
   roster, and the cockpit.
 - An avatar is a **receipt, not a mask** — show it next to the persona's track record (e.g. "41 closed,
   0 reverted") so the face earns trust rather than just decorating.
-
