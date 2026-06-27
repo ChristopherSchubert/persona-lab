@@ -39,19 +39,19 @@ them.
 
 If the persona is `developer` and the mode is `--dispatch`:
 
-1. Run `scripts/lock.sh claim --repo <repo> --holder <persona-name>` (`--repo` is the manifest
+1. Run `"${CLAUDE_PLUGIN_ROOT}"/scripts/lock.sh claim --repo <repo> --holder <persona-name>` (`--repo` is the manifest
    `repo` value; it names the lock ref (`persona-lock/<repo>`). `gh api` resolves the actual
    GitHub `{owner}/{repo}` from the repo's remote, not from `--repo`). Record the returned fence SHA.
 2. Work inside a worktree (`claude --worktree`) for the unit of work.
 3. Immediately before any integrate-to-main push, run:
    ```
-   scripts/lock.sh verify-fence --repo <repo> --fence <recorded-fence>
+   "${CLAUDE_PLUGIN_ROOT}"/scripts/lock.sh verify-fence --repo <repo> --fence <recorded-fence>
    ```
    If verify-fence fails (mismatch), **abort the push**, checkpoint the work, and surface the
    conflict to the user. Do not force-push.
-4. On normal yield (task done), run `scripts/lock.sh release --repo <repo>`. Release is
+4. On normal yield (task done), run `"${CLAUDE_PLUGIN_ROOT}"/scripts/lock.sh release --repo <repo>`. Release is
    **best-effort**: on an abnormal or interrupted exit the lock may remain. In Phase 1 clear
-   it manually with `scripts/lock.sh release --repo <repo>` (automatic stale-lock recovery is
+   it manually with `"${CLAUDE_PLUGIN_ROOT}"/scripts/lock.sh release --repo <repo>` (automatic stale-lock recovery is
    Phase 4).
 
 No other persona acquires the writer lock. Non-developer personas with `--dispatch` operate in
@@ -59,7 +59,7 @@ read/advise/audit scope only; they do not write to the codebase.
 
 ### 4. Close gate (Developer, `--dispatch` mode only)
 
-The Developer cannot close / merge until `scripts/gate.sh check --head $(git rev-parse HEAD)`
+The Developer cannot close / merge until `"${CLAUDE_PLUGIN_ROOT}"/scripts/gate.sh check --head $(git rev-parse HEAD)`
 passes. The gate requires:
 
 - A verification marker in `.claude/persona-lab/`.
@@ -77,22 +77,22 @@ Read-only personas have no raw shell access to the issue bus. When any persona n
 a bus operation (file an issue, comment, label, or close), the launcher (this session) runs the
 appropriate `scripts/queue.sh` verb on the persona's behalf:
 
-- `scripts/queue.sh file --persona <name> --tier <capacity> --title "…" --body "…"`
-- `scripts/queue.sh comment <issue> --persona <name> --tier <capacity> --body "…"`
-- `scripts/queue.sh label <issue> --add <label>` / `--remove <label>`
-- `scripts/queue.sh close <issue>`
-- `scripts/queue.sh query --label <label>`
+- `"${CLAUDE_PLUGIN_ROOT}"/scripts/queue.sh file --persona <name> --tier <capacity> --title "…" --body "…"`
+- `"${CLAUDE_PLUGIN_ROOT}"/scripts/queue.sh comment <issue> --persona <name> --tier <capacity> --body "…"`
+- `"${CLAUDE_PLUGIN_ROOT}"/scripts/queue.sh label <issue> --add <label>` / `--remove <label>`
+- `"${CLAUDE_PLUGIN_ROOT}"/scripts/queue.sh close <issue>`
+- `"${CLAUDE_PLUGIN_ROOT}"/scripts/queue.sh query --label <label>`
 
 Before filing a new issue, run dedup check:
 ```
-scripts/dedup.sh check --persona <name> --rule <rule-slug> --path <file-or-scope> --snippet "<finding>"
+"${CLAUDE_PLUGIN_ROOT}"/scripts/dedup.sh check --persona <name> --rule <rule-slug> --path <file-or-scope> --snippet "<finding>"
 ```
 If the result starts with `dup:`, do not file — report the duplicate fingerprint to the user instead
 (report-by-exception).
 
 Every persona wake — summon or dispatch — appends a run record:
 ```
-scripts/runlog.sh append --persona <name> --repo <repo> --trigger <summon|dispatch> --outcome <pending|done|blocked> [--tokens N]
+"${CLAUDE_PLUGIN_ROOT}"/scripts/runlog.sh append --persona <name> --repo <repo> --trigger <summon|dispatch> --outcome <pending|done|blocked> [--tokens N]
 ```
 Append this at the start of the wake (outcome=pending) and update on completion, or simply append
 a completion record at the end if the implementation is simpler.
