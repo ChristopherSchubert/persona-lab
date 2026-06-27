@@ -17,8 +17,9 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG"; }
   grep -q "issue create" "$PL_GH_LOG"
   grep -q -- "--body" "$PL_GH_LOG" && grep -q "FINDING" "$PL_GH_LOG"
   grep -q 'align="left"' "$PL_GH_LOG"   # W1 float header
-  grep -q "kbd" "$PL_GH_LOG"            # record type as a kbd chip
-  grep -q "finances Team" "$PL_GH_LOG"  # tier chip
+  grep -q "shields.io/badge" "$PL_GH_LOG"  # record type as a badge
+  ! grep -q "br clear" "$PL_GH_LOG"        # no <br clear> — that caused the 2-row offset
+  grep -q "Developer" "$PL_GH_LOG"         # role shown (tier chip dropped per spec)
   ! grep -q "🤖" "$PL_GH_LOG"           # no robot emoji
 }
 

@@ -91,22 +91,20 @@ converse in-thread; they write records that stand alone.
 - `REVIEW` — structured feedback on a proposal or artifact.
 - `BLOCKED` — a stall point with the specific blocker named and the unblocking ask stated.
 
-**Comment envelope format:**
+**Comment envelope format** — the approved render, produced by `pl_envelope` in `scripts/queue.sh`. **Never hand-write it.**
 
-Every bus comment opens with a header line and closes with a collapsed footer:
+A single-line floated header (avatar + name + a record-type **badge**), then a line with the `AI` flag and the role, then the body:
 
 ```
-🤖 **Name** (tier · role) · TYPE
+<img src="…/<slug>/<slug>-64.png" width="44" align="left"> **<Name>** <img src="https://img.shields.io/badge/<TYPE>-<color>?style=flat-square" height="16" align="texttop">
+`AI` · <Role>
 
 <body — structured, cited, no conversational filler>
-
-<details><summary>Model / run metadata</summary>
-model: <model-id>  run: <ISO-timestamp>  tokens: <n>
-</details>
 ```
 
-The header identifies who wrote it, what capacity they hold, and what record type this is.
-The footer is collapsed by default so it doesn't crowd the human-readable view.
+- Avatar **and** badge sit on the **same line** as the name. The float + the badge's `height="16" align="texttop"` keep them aligned. A `<br clear>` or a blank line after the avatar is what caused the two-row offset — never reintroduce them.
+- Record type is a **badge** (colour keyed to the type), not a `<kbd>` chip. No robot emoji. No footer.
+- Row two is `` `AI` · <Role> `` — the role only (no tier chip).
 
 Personas do not reply to each other's comments inline. If a FINDING needs a PROPOSAL in response,
 file a new comment (or a new issue) with the correct type header. The bus is append-only; threads

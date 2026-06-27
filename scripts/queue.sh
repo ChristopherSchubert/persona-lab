@@ -8,12 +8,23 @@ cmd="${1:?usage: queue.sh <file|comment|label|close|query> ...}"; shift
 # tier may be "Tier · Role" — the Tier part renders as a chip, the Role as plain text.
 pl_envelope() { # persona tier type body
   local persona="$1" tier="$2" rtype="$3" body="$4"
-  local slug avatar tierchip role
+  local slug avatar role color
   slug="$(printf '%s' "$persona" | tr '[:upper:]' '[:lower:]' | sed 's/é/e/g' | tr -d ' ')"
   avatar="https://raw.githubusercontent.com/ChristopherSchubert/persona-lab/main/assets/avatars/${slug}/${slug}-64.png"
-  tierchip="${tier%% · *}"; role="${tier#* · }"; [ "$role" = "$tier" ] && role=""
-  printf '<img src="%s" width="44" align="left">\n\n`AI` **%s** <kbd>%s</kbd>\n`%s`%s\n\n<br clear="all">\n\n%s\n\n<sub>%s</sub>\n' \
-    "$avatar" "$persona" "$rtype" "$tierchip" "${role:+ · $role}" "$body" "$(date -u +%FT%TZ)"
+  role="${tier#* · }"; [ "$role" = "$tier" ] && role="$tier"
+  case "$rtype" in
+    PROPOSAL|ROUTING)             color=8b5cf6 ;;
+    DECISION)                     color=2563eb ;;
+    PROOF)                        color=16a34a ;;
+    FINDING)                      color=f59e0b ;;
+    HANDOFF)                      color=0891b2 ;;
+    REVIEW|REVIEW_NOTE)           color=06b6d4 ;;
+    BLOCKED|IMPEDIMENT|CHALLENGE) color=dc2626 ;;
+    *)                            color=64748b ;;
+  esac
+  # Approved envelope: single-line float (img + name + badge), then `AI` · role. No <br clear>, no footer.
+  printf '<img src="%s" width="44" align="left"> **%s** <img src="https://img.shields.io/badge/%s-%s?style=flat-square" height="16" align="texttop">\n`AI` · %s\n\n%s\n' \
+    "$avatar" "$persona" "$rtype" "$color" "$role" "$body"
 }
 
 # Helper: append a bus run record via runlog.sh.
