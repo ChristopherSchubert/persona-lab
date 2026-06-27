@@ -9,13 +9,17 @@ SH
 }
 teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG"; }
 
-@test "queue file: creates an issue and embeds the AI envelope + record type" {
+@test "queue file: creates an issue and embeds the W1 envelope + record type" {
   run scripts/queue.sh file --persona "Ben" --tier "finances Team · Developer" \
       --type FINDING --title "clock skew 401" --body "details"
   [ "$status" -eq 0 ]
   [[ "$output" == *"issues/42"* ]]
   grep -q "issue create" "$PL_GH_LOG"
   grep -q -- "--body" "$PL_GH_LOG" && grep -q "FINDING" "$PL_GH_LOG"
+  grep -q 'align="left"' "$PL_GH_LOG"   # W1 float header
+  grep -q "kbd" "$PL_GH_LOG"            # record type as a kbd chip
+  grep -q "finances Team" "$PL_GH_LOG"  # tier chip
+  ! grep -q "🤖" "$PL_GH_LOG"           # no robot emoji
 }
 
 @test "queue file: envelope embeds the persona avatar img" {

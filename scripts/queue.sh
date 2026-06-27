@@ -4,14 +4,16 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.s
 
 cmd="${1:?usage: queue.sh <file|comment|label|close|query> ...}"; shift
 
-# comment envelope: header line + body + collapsed provenance footer
+# comment envelope (W1): float avatar + 2-row header, chip tier, plain body, small footer.
+# tier may be "Tier · Role" — the Tier part renders as a chip, the Role as plain text.
 pl_envelope() { # persona tier type body
   local persona="$1" tier="$2" rtype="$3" body="$4"
-  local slug avatar
+  local slug avatar tierchip role
   slug="$(printf '%s' "$persona" | tr '[:upper:]' '[:lower:]' | sed 's/é/e/g' | tr -d ' ')"
   avatar="https://raw.githubusercontent.com/ChristopherSchubert/persona-lab/main/assets/avatars/${slug}/${slug}-64.png"
-  printf '<img src="%s" width="18"> 🤖 **%s** (%s) · %s\n\n%s\n\n<details><summary>AI persona — not the human</summary>\n%s · %s\n</details>\n' \
-    "$avatar" "$persona" "$tier" "$rtype" "$body" "$persona ($tier)" "$(date -u +%FT%TZ)"
+  tierchip="${tier%% · *}"; role="${tier#* · }"; [ "$role" = "$tier" ] && role=""
+  printf '<img src="%s" width="44" align="left">\n\n`AI` **%s** <kbd>%s</kbd>\n`%s`%s\n\n<br clear="all">\n\n%s\n\n<sub>%s</sub>\n' \
+    "$avatar" "$persona" "$rtype" "$tierchip" "${role:+ · $role}" "$body" "$(date -u +%FT%TZ)"
 }
 
 case "$cmd" in
