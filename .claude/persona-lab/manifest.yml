@@ -19,6 +19,7 @@ engagement:
   finops:             { capacity: owns }
   marketing:          { capacity: owns }
   technical-writer:   { capacity: audits }
+  release-engineer:   { capacity: audits }
 oversight:
   autonomy: conservative
   visibility: minimal

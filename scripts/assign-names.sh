@@ -24,6 +24,7 @@ case "$slug" in
   design-analyst)       title="Design Analyst" ;;
   qa-analyst)           title="QA Analyst" ;;
   technical-writer)     title="Technical Writer" ;;
+  release-engineer)     title="Release Engineer" ;;
   product-manager)      title="Product Manager" ;;
   lead-engineer)        title="Lead Engineer" ;;
   platform-architect)   title="Platform Architect" ;;

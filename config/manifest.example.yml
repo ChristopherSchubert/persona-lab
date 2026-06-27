@@ -87,6 +87,9 @@ engagement:
   technical-writer:
     capacity: audits
 
+  release-engineer:
+    capacity: audits
+
 # oversight: governance invariants that apply to every persona in every mode.
 oversight:
   # autonomy: MUST always be "conservative" — this is an invariant, not a tunable.
