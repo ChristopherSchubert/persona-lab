@@ -11,6 +11,30 @@
     "cost_tokens": {
       "type": "number",
       "description": "Total tokens consumed; harness-sourced from API response metadata, not self-reported by the model"
+    },
+    "role": {
+      "type": "string",
+      "description": "Role slug of the persona at time of run (e.g. developer, platform-architect)"
+    },
+    "action": {
+      "type": "string",
+      "description": "Verb describing what the persona did (e.g. bus:comment, bus:park, bus:quarantine)"
+    },
+    "record_type": {
+      "type": "string",
+      "description": "Category of record (e.g. bus for bus-write operations)"
+    },
+    "artifact_url": {
+      "type": "string",
+      "description": "URL of the artifact produced or acted upon (e.g. GitHub issue URL)"
+    },
+    "parent_id": {
+      "type": "string",
+      "description": "ID of the parent run record that triggered this one"
+    },
+    "issue_number": {
+      "type": "number",
+      "description": "GitHub issue number associated with this run, when applicable"
     }
   }
 }

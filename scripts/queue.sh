@@ -16,6 +16,26 @@ pl_envelope() { # persona tier type body
     "$avatar" "$persona" "$rtype" "$tierchip" "${role:+ · $role}" "$body" "$(date -u +%FT%TZ)"
 }
 
+# Helper: append a bus run record via runlog.sh.
+# Usage: _bus_record <persona> <action> <issue_number> [artifact_url]
+_bus_record() {
+  local persona="$1" action="$2" issue_num="$3" artifact_url="${4:-}"
+  local runs repo
+  runs="${PL_RUNS:-$(pl_config_dir)/runs}"
+  repo="$(pl_manifest_get repo 2>/dev/null || echo "")"
+  local args=(append
+    --persona "$persona"
+    --repo    "${repo:-unknown}"
+    --trigger "bus"
+    --outcome "posted"
+    --record-type "bus"
+    --action  "$action"
+    --issue-number "$issue_num"
+  )
+  [ -n "$artifact_url" ] && args+=(--artifact-url "$artifact_url")
+  "$here/runlog.sh" "${args[@]}" || true   # non-fatal: don't break the bus op
+}
+
 case "$cmd" in
   file)
     persona="" tier="" rtype="FINDING" title="" body="" repoflag=()
@@ -36,7 +56,9 @@ case "$cmd" in
       --type) rtype="$2"; shift 2;; --body) body="$2"; shift 2;;
       --repo) repoflag=(--repo "$2"); shift 2;;
       *) pl_die "unknown arg $1";; esac; done
-    gh issue comment ${repoflag[@]+"${repoflag[@]}"} "$issue" --body "$(pl_envelope "$persona" "$tier" "$rtype" "$body")"
+    comment_url="$(gh issue comment ${repoflag[@]+"${repoflag[@]}"} "$issue" --body "$(pl_envelope "$persona" "$tier" "$rtype" "$body")")"
+    printf '%s\n' "$comment_url"
+    _bus_record "$persona" "bus:comment" "$issue" "$comment_url"
     ;;
   label)
     issue="${1:?label <issue>}"; shift; repoflag=(); addlabel=""; removelabel=""
@@ -108,6 +130,7 @@ case "$cmd" in
       "$pl_fields_json" "$blocker_type" "$owner" "$deadline" "$unblocking_ask")"
     gh issue comment ${repoflag[@]+"${repoflag[@]}"} "$issue" --body "$park_body"
     gh issue edit   ${repoflag[@]+"${repoflag[@]}"} "$issue" --add-label "blocked-by:$blocker_type"
+    _bus_record "system" "bus:park" "$issue"
     ;;
 
   quarantine)
@@ -137,6 +160,7 @@ case "$cmd" in
       "$pl_fields_json" "$owner" "$deadline" "$origin")"
     gh issue comment ${repoflag[@]+"${repoflag[@]}"} "$issue" --body "$q_body"
     gh issue edit   ${repoflag[@]+"${repoflag[@]}"} "$issue" --add-label "quarantine"
+    _bus_record "system" "bus:quarantine" "$issue"
     ;;
 
   resume)
