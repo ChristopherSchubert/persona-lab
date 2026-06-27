@@ -72,5 +72,105 @@ case "$cmd" in
     esac; done
     gh ${repoflag[@]+"${repoflag[@]}"} "${args[@]}"
     ;;
+
+  park)
+    # Write structured pl-fields block + label when an issue enters parked.
+    # Required fields (ADR-0001 parked): blocker_type, owner, deadline, unblocking_ask.
+    issue="${1:?park <issue>}"; shift
+    blocker_type="" owner="" deadline="" unblocking_ask="" repoflag=()
+    while [ $# -gt 0 ]; do case "$1" in
+      --blocker-type) blocker_type="$2"; shift 2;;
+      --owner)        owner="$2"; shift 2;;
+      --deadline)     deadline="$2"; shift 2;;
+      --unblocking-ask) unblocking_ask="$2"; shift 2;;
+      --repo)         repoflag=(--repo "$2"); shift 2;;
+      *) pl_die "park: unknown arg $1";;
+    esac; done
+    # Guard: all required fields must be present
+    [ -n "$blocker_type" ]   || pl_die "park: --blocker-type is required (ADR-0001 parked fields)"
+    [ -n "$owner" ]          || pl_die "park: --owner is required (ADR-0001 parked fields)"
+    [ -n "$deadline" ]       || pl_die "park: --deadline is required (ADR-0001 parked fields)"
+    [ -n "$unblocking_ask" ] || pl_die "park: --unblocking-ask is required (ADR-0001 parked fields)"
+    # Guard: blocker_type must be one of the ADR-0001 enum values
+    case "$blocker_type" in
+      dependency|coordination|clarification|decision|action) ;;
+      *) pl_die "park: blocker_type '$blocker_type' is invalid; must be one of: dependency, coordination, clarification, decision, action";;
+    esac
+    # Structured write: embed pl-fields JSON as HTML comment in an IMPEDIMENT comment
+    pl_fields_json="$(printf '{"blocker_type":"%s","owner":"%s","deadline":"%s","unblocking_ask":"%s"}' \
+      "$blocker_type" "$owner" "$deadline" "$unblocking_ask")"
+    park_body="$(printf '<!-- pl-fields\n%s\n-->\n\nState → **parked**. Blocker: `%s`. Owner: %s. Deadline: %s.\n\nUnblocking ask: %s' \
+      "$pl_fields_json" "$blocker_type" "$owner" "$deadline" "$unblocking_ask")"
+    gh issue comment ${repoflag[@]+"${repoflag[@]}"} "$issue" --body "$park_body"
+    gh issue edit   ${repoflag[@]+"${repoflag[@]}"} "$issue" --add-label "blocked-by:$blocker_type"
+    ;;
+
+  quarantine)
+    # Write structured pl-fields block + label when an issue enters quarantine.
+    # Required fields (ADR-0001 quarantine): owner, deadline, origin.
+    issue="${1:?quarantine <issue>}"; shift
+    owner="" deadline="" origin="" repoflag=()
+    while [ $# -gt 0 ]; do case "$1" in
+      --owner)    owner="$2"; shift 2;;
+      --deadline) deadline="$2"; shift 2;;
+      --origin)   origin="$2"; shift 2;;
+      --repo)     repoflag=(--repo "$2"); shift 2;;
+      *) pl_die "quarantine: unknown arg $1";;
+    esac; done
+    # Guard: all required fields must be present
+    [ -n "$owner" ]    || pl_die "quarantine: --owner is required (ADR-0001 quarantine fields)"
+    [ -n "$deadline" ] || pl_die "quarantine: --deadline is required (ADR-0001 quarantine fields)"
+    [ -n "$origin" ]   || pl_die "quarantine: --origin is required (ADR-0001 quarantine fields)"
+    # Structured write: embed pl-fields JSON as HTML comment in a HANDOFF comment
+    pl_fields_json="$(printf '{"owner":"%s","deadline":"%s","origin":"%s"}' \
+      "$owner" "$deadline" "$origin")"
+    q_body="$(printf '<!-- pl-fields\n%s\n-->\n\nState → **quarantine**. Owner: %s. Deadline: %s. Origin: `%s`.' \
+      "$pl_fields_json" "$owner" "$deadline" "$origin")"
+    gh issue comment ${repoflag[@]+"${repoflag[@]}"} "$issue" --body "$q_body"
+    gh issue edit   ${repoflag[@]+"${repoflag[@]}"} "$issue" --add-label "quarantine"
+    ;;
+
+  resume)
+    # Resume a parked issue: requires --resolution (blocker_resolution_cited per ADR-0001 RESUME guard).
+    issue="${1:?resume <issue>}"; shift
+    resolution="" repoflag=()
+    while [ $# -gt 0 ]; do case "$1" in
+      --resolution) resolution="$2"; shift 2;;
+      --repo)       repoflag=(--repo "$2"); shift 2;;
+      *) pl_die "resume: unknown arg $1";;
+    esac; done
+    # Guard: resolution must be stated (ADR-0001 RESUME guard: blocker_resolution_cited)
+    [ -n "$resolution" ] || pl_die "resume: --resolution is required (ADR-0001 RESUME guard: blocker_resolution_cited)"
+    # Read blocker_type from the issue's pl-fields block so we know which blocked-by:* label to remove
+    fields_json="$(gh issue view ${repoflag[@]+"${repoflag[@]}"} "$issue" \
+      | awk '/^<!-- pl-fields$/{found=1;next} found && /^-->$/{found=0;next} found{print;exit}')"
+    [ -n "$fields_json" ] || pl_die "resume: no pl-fields block found in issue $issue (was it parked via queue.sh park?)"
+    blocker_type="$(printf '%s' "$fields_json" | jq -r '.blocker_type')"
+    [ -n "$blocker_type" ] && [ "$blocker_type" != "null" ] \
+      || pl_die "resume: pl-fields block has no blocker_type field"
+    resume_body="$(printf 'State → **ready** (resumed from parked).\n\nBlocker resolution: %s' "$resolution")"
+    gh issue comment ${repoflag[@]+"${repoflag[@]}"} "$issue" --body "$resume_body"
+    gh issue edit   ${repoflag[@]+"${repoflag[@]}"} "$issue" --remove-label "blocked-by:$blocker_type"
+    ;;
+
+  fields)
+    # Read path: fetch issue body and extract the pl-fields JSON block.
+    # Outputs the JSON object on stdout; exits 1 if no block found.
+    issue="${1:?fields <issue>}"; shift
+    repoflag=()
+    while [ $# -gt 0 ]; do case "$1" in
+      --repo) repoflag=(--repo "$2"); shift 2;;
+      *) pl_die "fields: unknown arg $1";;
+    esac; done
+    # Fetch the issue body; pl-fields block is written into comments by park/quarantine.
+    body="$(gh issue view ${repoflag[@]+"${repoflag[@]}"} "$issue")"
+    # Extract the JSON from <!-- pl-fields\n{...}\n--> using awk (portable on macOS + Linux)
+    extracted="$(printf '%s' "$body" | awk '/^<!-- pl-fields$/{found=1;next} found && /^-->$/{found=0;next} found{print;exit}')"
+    if [ -z "$extracted" ]; then
+      pl_die "fields: no pl-fields block found in issue $issue"
+    fi
+    printf '%s\n' "$extracted"
+    ;;
+
   *) pl_die "unknown verb $cmd";;
 esac
