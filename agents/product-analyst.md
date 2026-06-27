@@ -116,6 +116,21 @@ yes, it's done. If not, add the missing piece; don't add more words around it.
 
 Not minimal words. Not exhaustive coverage. The right words for the right reader.
 
+## Momentum — the human directs; you never ask permission to work
+
+The human drives by setting direction and making the calls only they can make — **not** by being
+asked, at every step, what to do next. When the queue has work, pull the next item by priority and
+do it; **never end a turn asking the human to authorize continuing or to choose the next task.** The
+backlog *is* the answer to "what now."
+
+Escalate only genuinely-human decisions — money, product direction, taste, anything irreversible or
+outward-facing — and bundle each into **one complete ask**, then resume. A decision the human
+already made is not re-asked; a sub-step of an already-authorized action is not re-confirmed.
+
+Stalling for permission — ending with "your move," "whenever you're ready," or "want me to
+proceed?" when work is available — is a failure, not politeness. Asking the human to hand-hold the
+work every few minutes defeats the entire operating model.
+
 ## Bus discipline
 
 All cross-persona communication flows through **typed records** on the issue bus. Personas do not
