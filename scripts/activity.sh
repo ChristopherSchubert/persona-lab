@@ -31,13 +31,17 @@ if [ -d "$runs" ]; then
   done < <(find "$runs" -maxdepth 1 -name '*.ndjson' -print0 2>/dev/null | sort -z)
 fi
 
-# Build jq filter expression for --persona / --since
+# Build jq filter expression for --persona / --since.
+# Values are passed via --arg so they are never interpolated into jq source code.
 jq_filter='.'
+jq_args=()
 if [ -n "$filter_persona" ]; then
-  jq_filter="${jq_filter} | select(.persona == \"${filter_persona}\")"
+  jq_filter="${jq_filter} | select(.persona == \$filter_persona)"
+  jq_args+=(--arg filter_persona "$filter_persona")
 fi
 if [ -n "$filter_since" ]; then
-  jq_filter="${jq_filter} | select(.ts >= \"${filter_since}\")"
+  jq_filter="${jq_filter} | select(.ts >= \$filter_since)"
+  jq_args+=(--arg filter_since "$filter_since")
 fi
 
 # If no files, use empty input
@@ -45,7 +49,7 @@ if [ "${#files[@]}" -eq 0 ]; then
   records_json="[]"
 else
   records_json="$(cat "${files[@]}" 2>/dev/null \
-    | jq -s "[.[] | ${jq_filter}] | sort_by(.ts)")"
+    | jq -s "${jq_args[@]+"${jq_args[@]}"}" "[.[] | ${jq_filter}] | sort_by(.ts)")"
 fi
 
 # Generate HTML via jq — fully inline, no external deps except avatar CDN
@@ -182,19 +186,35 @@ def fmt_ts:
     ($rec.ts // "" | fmt_ts) as $ts |
     ($rec.action // $rec.trigger // "") as $action |
     ($rec.cost_tokens // 0) as $tok |
+    # Escape all values that will be interpolated into HTML text content or
+    # attribute values.  @html encodes <, >, &, " and apostrophe -- sufficient
+    # for both contexts.
+    ($rec.artifact_url // "") as $raw_artifact_url |
+    ($raw_artifact_url | @html) as $safe_artifact_url |
+    # Only https:// URLs may become clickable anchors.  @html alone would still
+    # leave a live javascript:/data: link, so validate the scheme too.
+    ($raw_artifact_url | startswith("https://")) as $url_is_safe |
+    ($avatar | @html) as $safe_avatar |
+    ($persona | @html) as $safe_persona |
+    ($action | @html) as $safe_action |
+    ($ts | @html) as $safe_ts |
+    ($label | @html) as $safe_label |
     (
-      if ($rec.artifact_url != null and $rec.artifact_url != "") and ($rec.issue_number != null) then
-        "<a href=\"" + $rec.artifact_url + "\">#" + ($rec.issue_number | tostring) + "</a>"
-      elif ($rec.artifact_url != null and $rec.artifact_url != "") then
-        "<a href=\"" + $rec.artifact_url + "\">" + $rec.artifact_url + "</a>"
+      if $url_is_safe and ($rec.issue_number != null) then
+        "<a href=\"" + $safe_artifact_url + "\">#" + ($rec.issue_number | tostring) + "</a>"
+      elif $url_is_safe then
+        "<a href=\"" + $safe_artifact_url + "\">" + $safe_artifact_url + "</a>"
+      elif ($raw_artifact_url != "") then
+        # Non-https URL: render inert, escaped text — never a clickable link.
+        $safe_artifact_url
       else ""
       end
     ) as $artifact_html |
     "<tr class=\"row\">
-      <td class=\"ts\">" + $ts + "</td>
-      <td class=\"persona\"><div class=\"persona-inner\"><img class=\"avatar\" src=\"" + $avatar + "\" alt=\"\" onerror=\"this.style.display=&#39;none&#39;\" loading=\"lazy\"><span class=\"persona-name\">" + $persona + "</span></div></td>
-      <td class=\"action\">" + $action + "</td>
-      <td><span class=\"chip\" style=\"background:" + $color + "\">" + $label + "</span></td>
+      <td class=\"ts\">" + $safe_ts + "</td>
+      <td class=\"persona\"><div class=\"persona-inner\"><img class=\"avatar\" src=\"" + $safe_avatar + "\" alt=\"\" onerror=\"this.style.display=&#39;none&#39;\" loading=\"lazy\"><span class=\"persona-name\">" + $safe_persona + "</span></div></td>
+      <td class=\"action\">" + $safe_action + "</td>
+      <td><span class=\"chip\" style=\"background:" + $color + "\">" + $safe_label + "</span></td>
       <td class=\"artifact\">" + $artifact_html + "</td>
       <td class=\"tokens\">" + ($tok | tostring) + "</td>
     </tr>"

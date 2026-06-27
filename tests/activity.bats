@@ -119,3 +119,106 @@ NDJSON
   greg_pos="$(echo "$output" | grep -n "Greg" | head -1 | cut -d: -f1)"
   [ "$hana_pos" -lt "$greg_pos" ]
 }
+
+# ---------------------------------------------------------------------------
+# Security: HTML/attribute injection hardening
+# Each test seeds a record with a malicious payload and verifies the output is
+# properly escaped — i.e. the test FAILS against the unescaped original code.
+# ---------------------------------------------------------------------------
+
+@test "activity: persona name is HTML-escaped (no live <script> tag)" {
+  # persona field contains raw HTML that would execute in a browser if unescaped
+  cat > "$PL_RUNS/inject.ndjson" <<'NDJSON'
+{"ts":"2024-02-01T00:00:00Z","persona":"<script>alert(1)</script>","action":"test","outcome":"acted","cost_tokens":0}
+NDJSON
+  run scripts/activity.sh
+  [ "$status" -eq 0 ]
+  # The literal string <script> must NOT appear as a live tag
+  [[ "$output" != *"<script>alert"* ]]
+  # It must appear encoded instead
+  [[ "$output" == *"&lt;script&gt;"* ]]
+}
+
+@test "activity: action field is HTML-escaped (no broken table via </td>)" {
+  cat > "$PL_RUNS/inject.ndjson" <<'NDJSON'
+{"ts":"2024-02-01T00:00:00Z","persona":"Safe","action":"</td><td><script>alert(2)</script>","outcome":"acted","cost_tokens":0}
+NDJSON
+  run scripts/activity.sh
+  [ "$status" -eq 0 ]
+  # The injected closing tag must not appear raw
+  [[ "$output" != *"</td><td><script>"* ]]
+  # Must be encoded
+  [[ "$output" == *"&lt;/td&gt;"* ]]
+}
+
+@test "activity: artifact_url href attribute is escaped (no attribute break-out)" {
+  # A double-quote in the URL would close the href attribute and allow injection
+  cat > "$PL_RUNS/inject.ndjson" <<'NDJSON'
+{"ts":"2024-02-01T00:00:00Z","persona":"Safe","action":"test","outcome":"acted","cost_tokens":0,"artifact_url":"https://example.com/\" onmouseover=\"alert(3)","issue_number":99}
+NDJSON
+  run scripts/activity.sh
+  [ "$status" -eq 0 ]
+  # The raw onmouseover event handler must not appear as an unencoded attribute
+  [[ "$output" != *"onmouseover=\"alert(3)"* ]]
+  # The double-quote in the URL must be encoded
+  [[ "$output" == *"&quot;"* ]]
+}
+
+@test "activity: persona slug in img src is escaped (no attribute injection)" {
+  # A slug derived from a name like 'x" onerror="alert(4)' would break out of src=""
+  cat > "$PL_RUNS/inject.ndjson" <<'NDJSON'
+{"ts":"2024-02-01T00:00:00Z","persona":"x\" onerror=\"alert(4)","action":"test","outcome":"acted","cost_tokens":0}
+NDJSON
+  run scripts/activity.sh
+  [ "$status" -eq 0 ]
+  # The raw onerror handler must not appear
+  [[ "$output" != *"onerror=\"alert(4)"* ]]
+  # The double-quote in the slug must be encoded in the src attribute
+  [[ "$output" == *"&quot;"* ]]
+}
+
+@test "activity: ampersand in values is HTML-escaped" {
+  cat > "$PL_RUNS/inject.ndjson" <<'NDJSON'
+{"ts":"2024-02-01T00:00:00Z","persona":"A & B","action":"do & done","outcome":"acted","cost_tokens":0}
+NDJSON
+  run scripts/activity.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"&amp;"* ]]
+}
+
+@test "activity: non-https artifact_url is not rendered as a clickable link (no javascript: scheme)" {
+  # A javascript: URL is escaped by @html but would still be a live, clickable
+  # XSS link. Only https:// URLs may become anchors; anything else is inert.
+  cat > "$PL_RUNS/inject.ndjson" <<'NDJSON'
+{"ts":"2024-02-01T00:00:00Z","persona":"Safe","action":"test","outcome":"acted","cost_tokens":0,"artifact_url":"javascript:alert(5)","issue_number":99}
+NDJSON
+  run scripts/activity.sh
+  [ "$status" -eq 0 ]
+  # No anchor whose href carries the javascript: scheme
+  [[ "$output" != *"href=\"javascript:"* ]]
+}
+
+@test "activity: https artifact_url is still rendered as a clickable link" {
+  cat > "$PL_RUNS/inject.ndjson" <<'NDJSON'
+{"ts":"2024-02-01T00:00:00Z","persona":"Safe","action":"test","outcome":"acted","cost_tokens":0,"artifact_url":"https://example.com/ok","issue_number":42}
+NDJSON
+  run scripts/activity.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"href=\"https://example.com/ok\""* ]]
+}
+
+@test "activity: --persona filter passes value via jq --arg (no jq code injection)" {
+  # A malicious --persona value that would break out of the interpolated jq string
+  # and inject arbitrary jq code must be handled safely.
+  # We rely on the fix (--arg) making this harmless; the test verifies no crash
+  # and that no unintended records leak through.
+  cat > "$PL_RUNS/inject.ndjson" <<'NDJSON'
+{"ts":"2024-02-01T00:00:00Z","persona":"Safe","action":"ok","outcome":"acted","cost_tokens":0}
+NDJSON
+  # Value that would break jq string interpolation if not quoted properly
+  run scripts/activity.sh --persona 'Safe" or .persona == "Safe'
+  [ "$status" -eq 0 ]
+  # Should produce 0 rows — no persona exactly matches the injected string
+  count="$(echo "$output" | grep -c '<tr class="row' || true)"
+  [ "$count" -eq 0 ]
+}
