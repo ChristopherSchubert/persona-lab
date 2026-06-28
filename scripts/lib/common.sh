@@ -20,6 +20,18 @@ pl_manifest_get() {
   fi
 }
 
+# Resolve a gh-valid "OWNER/REPO" for the active repo. The manifest `repo` may be a short logical
+# name (it scopes the lock ref, where any string is fine), but `gh --repo` requires OWNER/REPO —
+# so if it isn't already OWNER/REPO, fall back to the cwd repo's nameWithOwner. Used by the
+# dispatch/audit harness when posting to the bus so `gh --repo <short>` never fails.
+pl_gh_repo() {
+  local r nwo
+  r="${PL_REPO:-$(pl_manifest_get repo 2>/dev/null || echo "")}"
+  case "$r" in */*) printf '%s' "$r"; return;; esac
+  nwo="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
+  [ -n "$nwo" ] && printf '%s' "$nwo" || printf '%s' "$r"
+}
+
 # Resolve the directory where run records are written/read.
 # Precedence: PL_RUNS_DIR (test-isolation override) > PL_RUNS (legacy override) > config default.
 # Tests set PL_RUNS_DIR to a temp dir so they never pollute the real runs dir.

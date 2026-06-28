@@ -51,6 +51,7 @@ esac; done
 CLAUDE_BIN="${PL_CLAUDE:-claude}"
 LOCK_SH="${PL_LOCK_SH:-$here/lock.sh}"
 repo="${PL_REPO:-$(pl_manifest_get repo 2>/dev/null || echo unknown)}"
+ghrepo="$(pl_gh_repo)"   # gh-valid OWNER/REPO for bus posts (manifest 'repo' may be a short name)
 
 # A MUTATOR holds the writer lock before dispatch: any persona granted Write/Edit — the
 # Developer (`writes`, the code writer) OR a doc-writer (`doc-writes`). At most ONE mutator
@@ -206,7 +207,7 @@ dispatch_one() {
     rtype="$(printf '%s' "$record" | jq -r '.record_type // empty' 2>/dev/null)"
     body="$(printf '%s'  "$record" | jq -r '.body // empty'        2>/dev/null)"
     if _valid_rtype "$rtype" && [ -n "$body" ]; then
-      if url="$("$here/queue.sh" comment "$issue_number" --persona "$name" --tier "$role" --type "$rtype" --body "$body" --repo "$repo" 2>/dev/null)"; then
+      if url="$("$here/queue.sh" comment "$issue_number" --persona "$name" --tier "$role" --type "$rtype" --body "$body" --repo "$ghrepo" 2>/dev/null)"; then
         outcome="dispatched"
         echo "dispatch: <- #${issue_number} '${persona}' posted ${rtype} -> ${url}" >&2
       else

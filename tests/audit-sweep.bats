@@ -15,6 +15,7 @@ echo "GH $*" >> "$PL_GH_LOG"
 case "$1 $2" in
   "issue list")   cat "$PL_FAKE_ISSUES";;
   "issue create") echo "https://github.com/o/r/issues/123";;
+  "repo view")    echo "acme/persona-lab";;
 esac
 SH
   chmod +x "$PL_TEST_BIN/gh"
@@ -153,6 +154,32 @@ SH
   grep -qF "issue create" "$PL_GH_LOG"
   grep -qF "Streamed finding" "$PL_GH_LOG"
   # MUTATION PROOF: ignore PL_STREAM (always buffered) → no live "Read docs/x.md" line, this fails.
+}
+
+@test "audit-sweep: resolves a gh-valid OWNER/REPO for filing (not the short manifest name)" {
+  run scripts/audit-sweep.sh technical-writer
+  [ "$status" -eq 0 ]
+  grep -qF "issue create" "$PL_GH_LOG"
+  grep -qF "acme/persona-lab" "$PL_GH_LOG"   # used the resolved OWNER/REPO via pl_gh_repo
+  # MUTATION PROOF: pass the short manifest 'repo' to gh --repo → "acme/persona-lab" absent, this fails.
+}
+
+@test "audit-sweep: surfaces the queue.sh error when filing fails (no silent swallow)" {
+  cat > "$PL_TEST_BIN/gh" <<'SH'
+#!/usr/bin/env bash
+echo "GH $*" >> "$PL_GH_LOG"
+case "$1 $2" in
+  "issue list")   cat "$PL_FAKE_ISSUES";;
+  "repo view")    echo "acme/persona-lab";;
+  "issue create") echo "gh: HTTP 422 validation failed" >&2; exit 1;;
+esac
+SH
+  chmod +x "$PL_TEST_BIN/gh"
+  run scripts/audit-sweep.sh technical-writer
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qF "FILE FAILED"
+  echo "$output" | grep -qF "422 validation failed"   # the real error is surfaced, not swallowed
+  # MUTATION PROOF: redirect the file call's stderr to /dev/null again → error not shown, this fails.
 }
 
 @test "audit-sweep: dumps the raw output when it cannot parse a findings array" {

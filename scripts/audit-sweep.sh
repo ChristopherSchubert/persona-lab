@@ -27,6 +27,13 @@ CLAUDE_BIN="${PL_CLAUDE:-claude}"
 repo="${PL_REPO:-$(pl_manifest_get repo 2>/dev/null || echo unknown)}"
 roles_file="${PL_AUDIT_ROLES:-$here/../config/audit-roles.txt}"
 
+# Colors for the chatty log — only when stderr is a real terminal and NO_COLOR is unset.
+if [ -t 2 ] && [ -z "${NO_COLOR:-}" ]; then
+  C_HEAD=$'\033[1;36m'; C_DIM=$'\033[2m'; C_OK=$'\033[32m'; C_ERR=$'\033[1;31m'; C_WARN=$'\033[33m'; C_RST=$'\033[0m'
+else
+  C_HEAD=''; C_DIM=''; C_OK=''; C_ERR=''; C_WARN=''; C_RST=''
+fi
+
 dry_run=0; only=""
 while [ $# -gt 0 ]; do case "$1" in
   --dry-run)      dry_run=1; shift;;
@@ -78,10 +85,10 @@ _run_claude() {
     local tmp; tmp="$(mktemp)"
     "$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed \
         --output-format stream-json --verbose 2>/dev/null | tee "$tmp" | while IFS= read -r ln; do
-      printf '%s' "$ln" | jq -r '
+      printf '%s' "$ln" | jq -r --arg d "$C_DIM" --arg r "$C_RST" '
         if .type=="assistant" then (.message.content[]? |
-            if .type=="tool_use" then "      · \(.name) \(.input.file_path // .input.pattern // .input.command // .input.path // "")"
-            elif .type=="text" and ((.text|length)>0) then "      \(.text[0:200])"
+            if .type=="tool_use" then "\($d)      · \(.name) \(.input.file_path // .input.pattern // .input.command // .input.path // "")\($r)"
+            elif .type=="text" and ((.text|length)>0) then "\($d)      \(.text[0:200])\($r)"
             else empty end)
         else empty end' >&2 2>/dev/null
     done
@@ -95,6 +102,8 @@ _run_claude() {
   fi
 }
 
+# gh needs OWNER/REPO; the manifest's short `repo` would make `gh --repo` fail, so resolve it.
+ghrepo="$(pl_gh_repo)"
 # Existing OPEN issue titles, fetched once, for dedup so re-sweeps don't refile the same finding.
 existing_titles="$(gh issue list --state open --json title --limit 300 | jq -r '.[].title')"
 
@@ -111,15 +120,15 @@ sweep_one() {
   local prompt
   prompt="$(printf 'You are sweeping repo %s for work in YOUR domain that is NOT yet tracked as an open issue. Audit the committed state (code, docs, tests, config) with your granted tools. You CANNOT file issues — return findings and the harness files the new ones (duplicate titles are skipped). Return ONLY a JSON array (empty [] if nothing), each item exactly:\n{"title":"<concise issue title>","body":"<the finding as GitHub-flavored markdown: what, where as path:line, why it matters>","record_type":"<ASSESSMENT|BLOCKER>","priority":"<p0|p1|p2|p3>"}\n' "$repo")"
 
-  echo "audit-sweep: -> '${persona}' (${name} · ${role}) sweeping ${repo}..." >&2
+  echo "${C_HEAD}audit-sweep: -> '${persona}' (${name} · ${role}) sweeping ${repo}...${C_RST}" >&2
   local result arr n filed=0 dup=0 i title body rtype prio url num
   result="$(_run_claude "$agent" "$allowed" "$prompt")"
   arr="$(printf '%s' "$result" | _extract_json || true)"
   if ! printf '%s' "$arr" | jq -e 'type=="array"' >/dev/null 2>&1; then
     if [ -z "$result" ]; then
-      echo "audit-sweep: <- '${persona}' returned nothing (claude produced no output)" >&2
+      echo "${C_WARN}audit-sweep: <- '${persona}' returned nothing (claude produced no output)${C_RST}" >&2
     else
-      echo "audit-sweep: <- '${persona}' returned no parseable findings array — raw output below:" >&2
+      echo "${C_WARN}audit-sweep: <- '${persona}' returned no parseable findings array — raw output below:${C_RST}" >&2
       printf '%s\n' "$result" | sed 's/^/    | /' | head -40 >&2
     fi
     arr="[]"
@@ -133,16 +142,20 @@ sweep_one() {
     [ -n "$title" ] && [ -n "$body" ] || continue
     _valid_rtype "$rtype" || rtype="ASSESSMENT"
     if printf '%s\n' "$existing_titles" | grep -qxF "$title"; then dup=$((dup+1)); continue; fi
-    if ! url="$("$here/queue.sh" file --persona "$name" --tier "$role" --type "$rtype" --title "$title" --body "$body" --repo "$repo" 2>/dev/null)"; then
-      echo "audit-sweep:    FILE FAILED: ${title}" >&2; continue
+    if url="$("$here/queue.sh" file --persona "$name" --tier "$role" --type "$rtype" --title "$title" --body "$body" --repo "$ghrepo" 2>&1)"; then
+      :
+    else
+      echo "${C_ERR}audit-sweep:    FILE FAILED for '${title}':${C_RST}" >&2
+      printf '%s\n' "$url" | sed 's/^/        /' >&2
+      url=""; continue
     fi
     num="${url##*/}"
-    case "$prio" in p0|p1|p2|p3) [ -n "$num" ] && "$here/queue.sh" label "$num" --add "priority:$prio" --repo "$repo" >/dev/null 2>&1 || true;; esac
+    case "$prio" in p0|p1|p2|p3) [ -n "$num" ] && "$here/queue.sh" label "$num" --add "priority:$prio" --repo "$ghrepo" >/dev/null 2>&1 || true;; esac
     existing_titles="$(printf '%s\n%s' "$existing_titles" "$title")"   # also dedup within this run
     filed=$((filed+1))
-    echo "audit-sweep:    filed #${num} [${prio:-p?}] ${title}" >&2
+    echo "${C_OK}audit-sweep:    filed #${num} [${prio:-p?}] ${title}${C_RST}" >&2
   done
-  echo "audit-sweep: <- '${persona}': ${n} finding(s), ${filed} filed, ${dup} duplicate(s) skipped" >&2
+  echo "${C_HEAD}audit-sweep: <- '${persona}': ${n} finding(s), ${filed} filed, ${dup} duplicate(s) skipped${C_RST}" >&2
   "$here/runlog.sh" append --persona "$persona" --repo "$repo" --trigger "audit-sweep" \
     --outcome "swept" --record-type "audit" --action "sweep" || true
 }
