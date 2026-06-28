@@ -85,7 +85,7 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE" "$PL_ISSUE
     --deadline "2026-07-10" \
     --unblocking-ask "Deploy"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"blocker"* ]] || [[ "${lines[*]}" == *"blocker"* ]]
+  { echo "$output"; printf '%s\n' "${lines[@]}"; } | grep -qF 'blocker'
 }
 
 @test "park: rejects missing --owner" {
@@ -94,7 +94,7 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE" "$PL_ISSUE
     --deadline "2026-07-10" \
     --unblocking-ask "Deploy"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"owner"* ]] || [[ "${lines[*]}" == *"owner"* ]]
+  { echo "$output"; printf '%s\n' "${lines[@]}"; } | grep -qF 'owner'
 }
 
 @test "park: rejects missing --deadline" {
@@ -103,7 +103,7 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE" "$PL_ISSUE
     --owner "Tom" \
     --unblocking-ask "Deploy"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"deadline"* ]] || [[ "${lines[*]}" == *"deadline"* ]]
+  { echo "$output"; printf '%s\n' "${lines[@]}"; } | grep -qF 'deadline'
 }
 
 @test "park: rejects missing --unblocking-ask" {
@@ -112,7 +112,7 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE" "$PL_ISSUE
     --owner "Tom" \
     --deadline "2026-07-10"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"unblocking"* ]] || [[ "${lines[*]}" == *"unblocking"* ]]
+  { echo "$output"; printf '%s\n' "${lines[@]}"; } | grep -qF 'unblocking'
 }
 
 @test "park: rejects invalid blocker_type" {
@@ -122,7 +122,7 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE" "$PL_ISSUE
     --deadline "2026-07-10" \
     --unblocking-ask "Deploy"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"blocker_type"* ]] || [[ "${lines[*]}" == *"blocker_type"* ]]
+  { echo "$output"; printf '%s\n' "${lines[@]}"; } | grep -qF 'blocker_type'
 }
 
 @test "park: --repo flag is forwarded to gh" {
@@ -183,7 +183,7 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE" "$PL_ISSUE
     --deadline "2026-07-10" \
     --origin "external:github-issue"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"owner"* ]] || [[ "${lines[*]}" == *"owner"* ]]
+  { echo "$output"; printf '%s\n' "${lines[@]}"; } | grep -qF 'owner'
 }
 
 @test "quarantine: rejects missing --deadline" {
@@ -191,7 +191,7 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE" "$PL_ISSUE
     --owner "PM" \
     --origin "external:github-issue"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"deadline"* ]] || [[ "${lines[*]}" == *"deadline"* ]]
+  { echo "$output"; printf '%s\n' "${lines[@]}"; } | grep -qF 'deadline'
 }
 
 @test "quarantine: rejects missing --origin" {
@@ -199,7 +199,7 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE" "$PL_ISSUE
     --owner "PM" \
     --deadline "2026-07-10"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"origin"* ]] || [[ "${lines[*]}" == *"origin"* ]]
+  { echo "$output"; printf '%s\n' "${lines[@]}"; } | grep -qF 'origin'
 }
 
 # ---------------------------------------------------------------------------
@@ -238,7 +238,7 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE" "$PL_ISSUE
 @test "resume: rejects missing --resolution" {
   run scripts/queue.sh resume 42
   [ "$status" -ne 0 ]
-  [[ "$output" == *"resolution"* ]] || [[ "${lines[*]}" == *"resolution"* ]]
+  { echo "$output"; printf '%s\n' "${lines[@]}"; } | grep -qF 'resolution'
 }
 
 @test "resume: --repo flag is forwarded" {
@@ -260,17 +260,17 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE" "$PL_ISSUE
     > "$PL_ISSUE_COMMENTS_FILE"
   run scripts/queue.sh fields 42
   [ "$status" -eq 0 ]
-  [[ "$output" == *'"owner"'* ]]
-  [[ "$output" == *'"Tom"'* ]]
-  [[ "$output" == *'"deadline"'* ]]
-  [[ "$output" == *'"blocker_type"'* ]]
+  echo "$output" | grep -qF '"owner"'
+  echo "$output" | grep -qF '"Tom"'
+  echo "$output" | grep -qF '"deadline"'
+  echo "$output" | grep -qF '"blocker_type"'
 }
 
 @test "fields: returns exit 1 when no pl-fields block present" {
   printf 'No structured block here\n' > "$PL_ISSUE_BODY_FILE"
   run scripts/queue.sh fields 42
   [ "$status" -ne 0 ]
-  [[ "$output" == *"no pl-fields block"* ]] || [[ "${lines[*]}" == *"pl-fields"* ]]
+  { echo "$output"; printf '%s\n' "${lines[@]}"; } | grep -qF 'pl-fields'
 }
 
 @test "fields: --repo flag is forwarded to gh issue view" {
@@ -295,7 +295,7 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE" "$PL_ISSUE
   # Correct implementation reads comments → exit 0 with JSON output.
   run scripts/queue.sh fields 42
   [ "$status" -eq 0 ]
-  [[ "$output" == *'"owner"'* ]]
+  echo "$output" | grep -qF '"owner"'
 }
 
 @test "resume: fails when pl-fields block is only in issue body (not comments)" {
@@ -307,7 +307,7 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_ISSUE_BODY_FILE" "$PL_ISSUE
   run scripts/queue.sh resume 42 --resolution "Cleared"
   # pl-fields not in comments → must fail (not find the block)
   [ "$status" -ne 0 ]
-  [[ "$output" == *"pl-fields"* ]] || [[ "${lines[*]}" == *"pl-fields"* ]]
+  { echo "$output"; printf '%s\n' "${lines[@]}"; } | grep -qF 'pl-fields'
 }
 
 # ---------------------------------------------------------------------------

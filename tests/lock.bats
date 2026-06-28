@@ -43,7 +43,8 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_REF"; }
 
 @test "lock claim: returns the fence (the lock commit SHA)" {
   run scripts/lock.sh claim --repo finances --holder Ben
-  [ "$status" -eq 0 ]; [[ "$output" == "commitsha111111111111111111111111111111" ]]
+  [ "$status" -eq 0 ]
+  [ "$output" = "commitsha111111111111111111111111111111" ]
 }
 @test "lock claim: second claim is refused (held), no force/update attempted" {
   scripts/lock.sh claim --repo finances --holder Ben >/dev/null

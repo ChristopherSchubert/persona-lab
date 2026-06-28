@@ -13,14 +13,14 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG"; }
   run scripts/queue.sh file --persona "Ben" --tier "finances Team · Developer" \
       --type FINDING --title "clock skew 401" --body "details"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"issues/42"* ]]
+  echo "$output" | grep -qF 'issues/42'
   grep -q "issue create" "$PL_GH_LOG"
   grep -q -- "--body" "$PL_GH_LOG" && grep -q "FINDING" "$PL_GH_LOG"
   grep -q 'align="left"' "$PL_GH_LOG"   # W1 float header
   grep -q "shields.io/badge" "$PL_GH_LOG"  # record type as a badge
-  ! grep -q "br clear" "$PL_GH_LOG"        # no <br clear> — that caused the 2-row offset
+  if grep -q "br clear" "$PL_GH_LOG"; then false; fi  # no <br clear> — that caused the 2-row offset
   grep -q "Developer" "$PL_GH_LOG"         # role shown (tier chip dropped per spec)
-  ! grep -q "🤖" "$PL_GH_LOG"           # no robot emoji
+  if grep -q "🤖" "$PL_GH_LOG"; then false; fi  # no robot emoji
 }
 
 @test "queue file: envelope embeds the persona avatar img" {
@@ -65,13 +65,13 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG"; }
 @test "queue file without --repo: no stray --repo flag" {
   run scripts/queue.sh file --persona Ben --tier "t · Developer" --type FINDING --title x --body y
   [ "$status" -eq 0 ]
-  ! grep -q -- "--repo" "$PL_GH_LOG"
+  if grep -q -- "--repo" "$PL_GH_LOG"; then false; fi
 }
 
 @test "queue query without --repo: no stray --repo flag" {
   run scripts/queue.sh query --label needs-human:decision
   [ "$status" -eq 0 ]
-  ! grep -q -- "--repo" "$PL_GH_LOG"
+  if grep -q -- "--repo" "$PL_GH_LOG"; then false; fi
 }
 
 @test "queue label --repo (any order) targets the repo" {
