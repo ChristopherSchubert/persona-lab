@@ -52,11 +52,16 @@ CLAUDE_BIN="${PL_CLAUDE:-claude}"
 LOCK_SH="${PL_LOCK_SH:-$here/lock.sh}"
 repo="${PL_REPO:-$(pl_manifest_get repo 2>/dev/null || echo unknown)}"
 
-# Writer personas hold the writer lock before dispatch. Per manifest engagement and
-# persona.md §3, the Developer is the sole `writes`-capacity persona. Resolving capacity
-# from the manifest needs yq for nested keys (pl_manifest_get fails closed on those), so
-# the writer set is named here explicitly; extend this list if another writer is added.
-is_writer_persona() { case "$1" in developer) return 0;; *) return 1;; esac; }
+# A MUTATOR holds the writer lock before dispatch: any persona granted Write/Edit — the
+# Developer (`writes`, the code writer) OR a doc-writer (`doc-writes`). At most ONE mutator
+# runs per cycle (foreground, locked) so concurrent edits can't clobber the shared working
+# tree. Capacity is read from the agent's `tools:` frontmatter (built from capability-map.json),
+# so this needs no hardcoded persona list — add a role to doc-writers and it serializes too.
+_agent_tools() { awk -F'tools:[[:space:]]*' '/^tools:/{print $2; exit}' "agents/$1.md" 2>/dev/null; }
+is_mutating_persona() { case "$(_agent_tools "$1")" in *Write*|*Edit*) return 0;; *) return 1;; esac; }
+# The code writer (Write+Bash = Developer) is additionally gated on `dev:ready`; doc-writers are
+# not — a doc edit doesn't require upstream code review/design to be done.
+is_code_writer() { local t; t="$(_agent_tools "$1")"; case "$t" in *Bash*) case "$t" in *Write*) return 0;; esac;; esac; return 1; }
 
 # Caps (reversible defaults). PL_READONLY_CAP=1 reproduces the old one-per-cycle model.
 # PL_READONLY_HARD_CAP is a safety rail: the effective reader cap is never larger than it,
@@ -73,9 +78,9 @@ case "$hard_cap"     in ''|*[!0-9]*) pl_die "dispatch: PL_READONLY_HARD_CAP must
 #   sort:  priority asc (p0=0 … p3=3, default 3), then number asc
 #   emit:  every candidate as "<number>\t<persona-slug>\t<dev_ready>", highest-priority first.
 # `dev_ready` is "1" iff the issue also carries `dev:ready` (Tom's design on #37): the
-# writer (developer) partition requires it; readers ignore it entirely.
-# Partitioning into writer vs reader is done in bash via is_writer_persona() so the single
-# is_writer_persona() boundary stays the one source of truth (no persona list duplicated in jq).
+# code writer requires it; doc-writers and readers ignore it.
+# Partitioning into mutator vs reader is done in bash via is_mutating_persona() (capacity read
+# from the agent tools), so the one boundary stays the source of truth (no persona list in jq).
 issues_json="$(gh issue list --state open --json number,labels --limit 200)"
 
 candidates="$(printf '%s' "$issues_json" | jq -r '
@@ -100,19 +105,23 @@ candidates="$(printf '%s' "$issues_json" | jq -r '
   | "\(.number)\t\(.persona)\t\(.dev_ready)"
 ')"
 
-# Partition into writer (at most one) and reader (up to eff_cap) selections, preserving
-# the priority order from jq. The first writer encountered is the single writer dispatch.
-# WRITER GATE (#37): a writer candidate is eligible only if it carries `dev:ready` (dr=1) —
-# `state:ready` alone means upstream work isn't done yet. Readers are NOT gated: dev:ready
-# is irrelevant to them, they dispatch on `state:ready` as before.
+# Partition into ONE mutator (Write/Edit — serialized on the lock) and readers (up to eff_cap),
+# preserving the priority order from jq. The first eligible mutator fills the single locked slot.
+# DEV:READY GATE (#37): a *code writer* candidate is eligible only if it carries `dev:ready`
+# (dr=1) — `state:ready` alone means upstream work isn't done. Doc-writers serialize too but are
+# NOT dev:ready-gated. Readers are never gated; they dispatch on `state:ready` as before.
 writer_line=""
 reader_lines=()
 if [ -n "$candidates" ]; then
   while IFS=$'\t' read -r num pers dr; do
     [ -n "$num" ] || continue
-    if is_writer_persona "$pers"; then
-      if [ "$dr" = "1" ] && [ -z "$writer_line" ]; then
-        writer_line="${num}"$'\t'"${pers}"   # one dev:ready writer per cycle
+    if is_mutating_persona "$pers"; then
+      if [ -z "$writer_line" ]; then
+        if is_code_writer "$pers"; then
+          [ "$dr" = "1" ] && writer_line="${num}"$'\t'"${pers}"   # code writer needs dev:ready
+        else
+          writer_line="${num}"$'\t'"${pers}"                      # doc-writer: serialized, no gate
+        fi
       fi
     else
       if [ "${#reader_lines[@]}" -lt "$eff_cap" ]; then

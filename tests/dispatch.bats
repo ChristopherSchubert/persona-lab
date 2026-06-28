@@ -184,7 +184,7 @@ SH
   # Two ready readers, no PL_READONLY_CAP → default 1 → exactly one dispatched.
   fake_issues '[
     {"number":51,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p1"}]},
-    {"number":52,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p2"}]}
+    {"number":52,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:accessibility-analyst"},{"name":"priority:p2"}]}
   ]'
   run scripts/dispatch.sh
   [ "$status" -eq 0 ]
@@ -198,8 +198,8 @@ SH
 @test "dispatch: PL_READONLY_CAP=3 with 4 ready readers dispatches exactly 3, no lock" {
   fake_issues '[
     {"number":61,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p1"}]},
-    {"number":62,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]},
-    {"number":63,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p2"}]},
+    {"number":62,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:accessibility-analyst"},{"name":"priority:p1"}]},
+    {"number":63,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:privacy-analyst"},{"name":"priority:p2"}]},
     {"number":64,"title":"r4","labels":[{"name":"state:ready"},{"name":"persona:release-engineer"},{"name":"priority:p3"}]}
   ]'
   PL_READONLY_CAP=3 run scripts/dispatch.sh
@@ -230,8 +230,8 @@ SH
   export PL_CONC_LOG="$(mktemp)"
   fake_issues '[
     {"number":71,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p1"}]},
-    {"number":72,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]},
-    {"number":73,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p1"}]}
+    {"number":72,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:accessibility-analyst"},{"name":"priority:p1"}]},
+    {"number":73,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:privacy-analyst"},{"name":"priority:p1"}]}
   ]'
   PL_READONLY_CAP=3 run scripts/dispatch.sh
   [ "$status" -eq 0 ]
@@ -247,8 +247,8 @@ SH
 @test "dispatch: writer + readers in one cycle — readers dispatched AND the one writer with lock" {
   fake_issues '[
     {"number":80,"title":"writer","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"},{"name":"priority:p1"}]},
-    {"number":81,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]},
-    {"number":82,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p1"}]}
+    {"number":81,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:accessibility-analyst"},{"name":"priority:p1"}]},
+    {"number":82,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:privacy-analyst"},{"name":"priority:p1"}]}
   ]'
   PL_READONLY_CAP=3 run scripts/dispatch.sh
   [ "$status" -eq 0 ]
@@ -282,8 +282,8 @@ SH
   # 5 ready readers, cap asks for 5, but hard cap = 2 → exactly 2 dispatched.
   fake_issues '[
     {"number":101,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p1"}]},
-    {"number":102,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]},
-    {"number":103,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p1"}]},
+    {"number":102,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:accessibility-analyst"},{"name":"priority:p1"}]},
+    {"number":103,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:privacy-analyst"},{"name":"priority:p1"}]},
     {"number":104,"title":"r4","labels":[{"name":"state:ready"},{"name":"persona:release-engineer"},{"name":"priority:p1"}]},
     {"number":105,"title":"r5","labels":[{"name":"state:ready"},{"name":"persona:security-analyst"},{"name":"priority:p1"}]}
   ]'
@@ -296,8 +296,8 @@ SH
 @test "dispatch: all background readers write run records before exit (no lost records)" {
   fake_issues '[
     {"number":111,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p1"}]},
-    {"number":112,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]},
-    {"number":113,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p1"}]}
+    {"number":112,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:accessibility-analyst"},{"name":"priority:p1"}]},
+    {"number":113,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:privacy-analyst"},{"name":"priority:p1"}]}
   ]'
   PL_READONLY_CAP=3 run scripts/dispatch.sh
   [ "$status" -eq 0 ]
@@ -325,8 +325,8 @@ SH
   chmod +x "$PL_TEST_BIN/fake-claude"
   fake_issues '[
     {"number":131,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p1"}]},
-    {"number":132,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]},
-    {"number":133,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p1"}]}
+    {"number":132,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:accessibility-analyst"},{"name":"priority:p1"}]},
+    {"number":133,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:privacy-analyst"},{"name":"priority:p1"}]}
   ]'
   start="$(date +%s%N)"
   PL_READONLY_CAP=3 run scripts/dispatch.sh
@@ -388,7 +388,7 @@ SH
 @test "dispatch: dev:ready on a reader does not turn it into a writer (no lock, still reader)" {
   # Carrying dev:ready must not change a reader's classification or make it claim the lock.
   fake_issues '[
-    {"number":204,"title":"reader with devready","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:technical-writer"}]}
+    {"number":204,"title":"reader with devready","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:accessibility-analyst"}]}
   ]'
   run scripts/dispatch.sh
   [ "$status" -eq 0 ]
@@ -401,7 +401,7 @@ SH
   # gate is surgical: it removes the writer from the pool without starving readers.
   fake_issues '[
     {"number":205,"title":"writer gated","labels":[{"name":"state:ready"},{"name":"persona:developer"},{"name":"priority:p0"}]},
-    {"number":206,"title":"reader","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p1"}]}
+    {"number":206,"title":"reader","labels":[{"name":"state:ready"},{"name":"persona:privacy-analyst"},{"name":"priority:p1"}]}
   ]'
   PL_READONLY_CAP=3 run scripts/dispatch.sh
   [ "$status" -eq 0 ]
@@ -415,7 +415,7 @@ SH
 @test "dispatch: multi-dispatch never calls the real claude binary either" {
   fake_issues '[
     {"number":121,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p1"}]},
-    {"number":122,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]}
+    {"number":122,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:accessibility-analyst"},{"name":"priority:p1"}]}
   ]'
   cat > "$PL_TEST_BIN/claude" <<'SH'
 #!/usr/bin/env bash
@@ -541,4 +541,48 @@ SH
   [ "$status" -eq 0 ]
   if grep -qF "issue comment" "$PL_GH_LOG"; then false; fi
   # MUTATION PROOF: drop the _valid_rtype gate → BOGUS is posted, this fails.
+}
+
+# ── Mutator serialization (#80 part 2) ────────────────────────────────────────────────
+# Any persona granted Write/Edit (developer OR a doc-writer) is a "mutator" and must hold the
+# writer lock — at most ONE per cycle — so concurrent edits can't clobber the working tree.
+# The code writer (Write+Bash) is dev:ready-gated; doc-writers (Write, no Bash) are not.
+# These read the REAL agent tools, so technical-writer/head-of-design must be doc-writes.
+
+@test "dispatch: a doc-writer (Write, no Bash) holds the lock and needs NO dev:ready" {
+  fake_issues '[
+    {"number":300,"title":"doc fix","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF "#300" "$PL_CLAUDE_LOG"        # dispatched despite no dev:ready
+  grep -q "claim" "$PL_LOCK_LOG"          # and it serialized on the lock
+  grep -q "release" "$PL_LOCK_LOG"
+  # MUTATION PROOF: treat only the developer as a mutator → technical-writer runs lock-free, fails.
+}
+
+@test "dispatch: at most ONE mutator per cycle (developer beats a lower-priority doc-writer)" {
+  fake_issues '[
+    {"number":301,"title":"code","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"},{"name":"priority:p0"}]},
+    {"number":302,"title":"doc","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]}
+  ]'
+  PL_READONLY_CAP=5 run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF "#301" "$PL_CLAUDE_LOG"
+  if grep -qF "#302" "$PL_CLAUDE_LOG"; then false; fi   # doc-writer not also run — slot is taken
+  [ "$(grep -c claim "$PL_LOCK_LOG")" -eq 1 ]
+  # MUTATION PROOF: allow multiple mutators → #302 also dispatched, this fails.
+}
+
+@test "dispatch: a gated (no dev:ready) developer yields the mutator slot to a ready doc-writer" {
+  fake_issues '[
+    {"number":303,"title":"code not ready","labels":[{"name":"state:ready"},{"name":"persona:developer"},{"name":"priority:p0"}]},
+    {"number":304,"title":"doc","labels":[{"name":"state:ready"},{"name":"persona:head-of-design"},{"name":"priority:p1"}]}
+  ]'
+  PL_READONLY_CAP=5 run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  if grep -qF "#303" "$PL_CLAUDE_LOG"; then false; fi   # developer gated out (no dev:ready)
+  grep -qF "#304" "$PL_CLAUDE_LOG"                       # doc-writer takes the slot
+  grep -q "claim" "$PL_LOCK_LOG"
+  # MUTATION PROOF: gate doc-writers on dev:ready too → #304 not dispatched, this fails.
 }
