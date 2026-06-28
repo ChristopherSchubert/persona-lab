@@ -428,3 +428,117 @@ SH
   if grep -q "REAL CLAUDE CALLED" "$PL_CLAUDE_LOG"; then false; fi
   # MUTATION PROOF: invoke `claude` directly instead of "$CLAUDE_BIN" → real-claude marker appears, this fails.
 }
+
+# ── Capacity enforced at the invocation (#9 governance fix) ────────────────────────────
+# The fix: claude -p is launched with --allowedTools derived from the persona's `tools:`
+# frontmatter (capacity-driven) and the agent file as the system prompt. So capacity is
+# enforced at runtime, not merely advised — a reads-capacity persona cannot Edit/Write.
+
+@test "dispatch: invocation scopes --allowedTools to a writer's capacity (includes Write)" {
+  fake_issues '[
+    {"number":11,"title":"dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF -- "--allowedTools" "$PL_CLAUDE_LOG"
+  grep -qF "Write" "$PL_CLAUDE_LOG"
+  # MUTATION PROOF: drop --allowedTools from the invocation → "Write" absent, this fails.
+}
+
+@test "dispatch: invocation scopes a reader read-only (no Write/Edit in --allowedTools)" {
+  # product-analyst capacity = owns → Read,Grep,Glob — no Write/Edit. Enforced at invocation.
+  fake_issues '[
+    {"number":13,"title":"reader","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF -- "--allowedTools" "$PL_CLAUDE_LOG"
+  grep -qF "Read" "$PL_CLAUDE_LOG"
+  if grep -qE "Write|Edit" "$PL_CLAUDE_LOG"; then false; fi
+  # MUTATION PROOF: pass the developer's tool set regardless of capacity → "Write" appears, this fails.
+}
+
+@test "dispatch: the persona file is applied as the system prompt (not passed as the prompt)" {
+  fake_issues '[
+    {"number":11,"title":"dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF -- "--append-system-prompt-file agents/developer.md" "$PL_CLAUDE_LOG"
+  # MUTATION PROOF: revert to `claude -p "$agent" "$prompt"` → this flag is absent, this fails.
+}
+
+# ── Harness posts the persona's record (#9 access-model fix, option 1) ─────────────────
+# Most personas are read-only (no Bash) and cannot run queue.sh. So each persona RETURNS a
+# record as JSON and the HARNESS posts it under the persona envelope. The claude stub emits
+# the `--output-format json` envelope; `.result` carries the persona's record object.
+
+@test "dispatch: harness posts a returned record to the bus on the persona's behalf" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"ASSESSMENT\\",\\"body\\":\\"analysis here\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":13,"title":"analysis","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  # queue.sh comment -> gh issue comment on #13 with the record
+  grep -qF "issue comment" "$PL_GH_LOG"
+  grep -qF "13" "$PL_GH_LOG"
+  grep -qF "ASSESSMENT" "$PL_GH_LOG"
+  # MUTATION PROOF: drop the queue.sh post call → no "issue comment" logged, this fails.
+}
+
+@test "dispatch: the record is posted under the persona's resolved NAME, not the slug" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"DELIVERED\\",\\"body\\":\\"done\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":11,"title":"dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  # envelope rendered with the developer's name (Doug), not the slug "developer"
+  grep -qF "Doug" "$PL_GH_LOG"
+  grep -qF "DELIVERED" "$PL_GH_LOG"
+  # MUTATION PROOF: pass the slug as --persona instead of assign-names → "Doug" absent, this fails.
+}
+
+@test "dispatch: a persona returning no valid record posts nothing (graceful)" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"I could not complete this, sorry."}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":13,"title":"analysis","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -q "CLAUDE" "$PL_CLAUDE_LOG"
+  if grep -qF "issue comment" "$PL_GH_LOG"; then false; fi
+  # MUTATION PROOF: post unconditionally without validating the record → "issue comment" appears, this fails.
+}
+
+@test "dispatch: an invalid record_type is rejected (no junk envelope on the bus)" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"BOGUS\\",\\"body\\":\\"x\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":13,"title":"analysis","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  if grep -qF "issue comment" "$PL_GH_LOG"; then false; fi
+  # MUTATION PROOF: drop the _valid_rtype gate → BOGUS is posted, this fails.
+}

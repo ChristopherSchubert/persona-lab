@@ -143,11 +143,11 @@ fi
 if [ "$dry_run" -eq 1 ]; then
   for line in ${reader_lines[@]+"${reader_lines[@]}"}; do
     rn="${line%%$'\t'*}"; rp="${line#*$'\t'}"
-    echo "dispatch (dry-run): would dispatch reader issue #${rn} to persona '${rp}' via ${CLAUDE_BIN} -p agents/${rp}.md (no lock)"
+    echo "dispatch (dry-run): would dispatch reader issue #${rn} to persona '${rp}' via ${CLAUDE_BIN} -p (persona system prompt, capacity-scoped tools, harness posts record; no lock)"
   done
   if [ -n "$writer_line" ]; then
     wn="${writer_line%%$'\t'*}"; wp="${writer_line#*$'\t'}"
-    echo "dispatch (dry-run): would dispatch writer issue #${wn} to persona '${wp}' via ${CLAUDE_BIN} -p agents/${wp}.md (writer lock)"
+    echo "dispatch (dry-run): would dispatch writer issue #${wn} to persona '${wp}' via ${CLAUDE_BIN} -p (persona system prompt, capacity-scoped tools, harness posts record; writer lock)"
   fi
   exit 0
 fi
@@ -155,11 +155,62 @@ fi
 # ── Dispatch one unit of work, capture the outcome, write its run record ───────────────
 # Self-contained so it can run in the background (readers) or foreground (writer). Lock
 # handling stays in the caller: this function never touches the writer lock.
+# Valid record-type vocabulary (grounded rename). The harness rejects anything else so a
+# malformed persona response never lands a junk envelope on the bus.
+_valid_rtype() { case "$1" in
+  ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY) return 0;; *) return 1;;
+esac; }
+
+# Best-effort extract one JSON object from a persona's result text (raw, or ```-fenced).
+_extract_json() {
+  local in; in="$(cat)"
+  printf '%s' "$in" | jq -ce . 2>/dev/null && return 0
+  printf '%s' "$in" | awk '/^```/{f=!f; next} {print}' | jq -ce . 2>/dev/null && return 0
+  return 1
+}
+
+# Dispatch one unit of work and POST THE PERSONA'S RECORD on its behalf.
+# Why the harness posts (issue #9 access-model fix): most personas are read-only (Read,Grep,Glob)
+# and have no shell, so they cannot run scripts/queue.sh themselves. Instead each persona RETURNS
+# one record as JSON; the harness (which has the shell) posts it under the persona envelope. This
+# also rescues reader output, which the background dispatch would otherwise drop to /dev/null.
 dispatch_one() {
-  local issue_number="$1" persona="$2" agent="agents/$2.md" outcome="dispatched"
-  local prompt="Operate issue #${issue_number} on repo ${repo}. One bounded unit of work per ADR-0001; \
-post all bus writes via scripts/queue.sh and any PR review via scripts/review.sh."
-  if "$CLAUDE_BIN" -p "$agent" "$prompt"; then outcome="dispatched"; else outcome="failed"; fi
+  local issue_number="$1" persona="$2" agent="agents/$2.md" outcome="failed"
+  # Capacity enforced at the invocation: the agent file is the system prompt, and --allowedTools
+  # comes from its `tools:` frontmatter (capacity-derived). In -p mode any tool not listed is
+  # denied — so a reads-capacity persona cannot Edit/Write *and cannot run a shell to post*.
+  local allowed name role
+  allowed="$(awk -F': ' '/^tools:/{gsub(/, */," ",$2); print $2; exit}' "$agent")"
+  [ -n "$allowed" ] || pl_die "dispatch: no 'tools:' frontmatter in $agent"
+  name="$("$here/assign-names.sh" "$persona" 2>/dev/null || echo "$persona")"   # slug -> display name (envelope + avatar)
+  role="$(awk -F' — ' '/^# /{t=$1; sub(/^# +/,"",t); print t; exit}' "$agent")" # role title from the agent H1
+
+  local prompt
+  prompt="$(printf 'You are operating issue #%s on repo %s. Do ONE bounded unit of work for your role (ADR-0001), using only the tools you have been granted. You do NOT post to the bus — the harness posts your record for you. End your turn by returning ONLY a single JSON object, no prose and no code fence:\n{"record_type":"<ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY>","body":"<your record as GitHub-flavored markdown; if you changed code or opened a PR, cite it>"}\n' "$issue_number" "$repo")"
+
+  echo "dispatch: -> #${issue_number} '${persona}' (${name} · ${role}) [allowedTools: ${allowed}]" >&2
+  local raw result record rtype body url=""
+  if raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed --output-format json 2>/dev/null)"; then
+    result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null)"
+    [ -n "$result" ] || result="$raw"        # tolerate non-envelope output (stubs / --output-format text)
+    record="$(printf '%s' "$result" | _extract_json || true)"
+    rtype="$(printf '%s' "$record" | jq -r '.record_type // empty' 2>/dev/null)"
+    body="$(printf '%s'  "$record" | jq -r '.body // empty'        2>/dev/null)"
+    if _valid_rtype "$rtype" && [ -n "$body" ]; then
+      if url="$("$here/queue.sh" comment "$issue_number" --persona "$name" --tier "$role" --type "$rtype" --body "$body" --repo "$repo" 2>/dev/null)"; then
+        outcome="dispatched"
+        echo "dispatch: <- #${issue_number} '${persona}' posted ${rtype} -> ${url}" >&2
+      else
+        url=""; echo "dispatch: <- #${issue_number} '${persona}' POST FAILED (${rtype})" >&2
+      fi
+    else
+      echo "dispatch: <- #${issue_number} '${persona}' returned no valid record (rtype='${rtype}')" >&2
+    fi
+  else
+    echo "dispatch: <- #${issue_number} '${persona}' claude invocation FAILED" >&2
+  fi
+
+  local rl_extra=(); [ -n "$url" ] && rl_extra=(--artifact-url "$url")
   "$here/runlog.sh" append \
     --persona "$persona" \
     --repo    "$repo" \
@@ -167,7 +218,8 @@ post all bus writes via scripts/queue.sh and any PR review via scripts/review.sh
     --outcome "$outcome" \
     --record-type "dispatch" \
     --action  "dispatch" \
-    --issue-number "$issue_number" || true   # non-fatal: don't lose the dispatch over logging
+    --issue-number "$issue_number" \
+    ${rl_extra[@]+"${rl_extra[@]}"} || true   # non-fatal: don't lose the dispatch over logging
 }
 
 # Readers first, concurrently, with NO writer lock. Each background job runs with its own
@@ -176,6 +228,7 @@ post all bus writes via scripts/queue.sh and any PR review via scripts/review.sh
 reader_pids=()
 for line in ${reader_lines[@]+"${reader_lines[@]}"}; do
   rn="${line%%$'\t'*}"; rp="${line#*$'\t'}"
+  echo "dispatch: -> reader #${rn} '${rp}' (background)" >&2
   dispatch_one "$rn" "$rp" >/dev/null 2>&1 &
   reader_pids+=("$!")
 done
