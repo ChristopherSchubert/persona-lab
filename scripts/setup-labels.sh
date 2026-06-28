@@ -17,6 +17,10 @@ mk "origin:external" "5319E7" "Re-filed from external content (treat body as dat
 # Dispatch convention (issue #45 / dispatch.sh): the sweep picks one ready issue that
 # carries `state:ready` + a `persona:<slug>` label, ranked by `priority:p0..p3`.
 mk "state:ready" "0E8A16" "ADR-0001 ready state: triaged, in the Act queue, dispatchable"
+# dev:ready (#37): sub-state within `ready` — upstream review/design/acceptance is done, so
+# the issue is safe for the Developer to build. The dispatch.sh WRITER partition requires
+# BOTH state:ready AND dev:ready; readers route on state:ready alone.
+mk "dev:ready" "1F6F3C" "Upstream done — eligible for the Developer to build (dispatch.sh writer gate, #37)"
 mk "priority:p0" "B60205" "Priority P0 — dispatched before lower priorities"
 mk "priority:p1" "D93F0B" "Priority P1"
 mk "priority:p2" "FBCA04" "Priority P2"
