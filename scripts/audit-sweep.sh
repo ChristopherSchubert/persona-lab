@@ -29,11 +29,13 @@ roles_file="${PL_AUDIT_ROLES:-$here/../config/audit-roles.txt}"
 
 dry_run=0; only=""
 while [ $# -gt 0 ]; do case "$1" in
-  --dry-run) dry_run=1; shift;;
-  --repo)    repo="$2"; shift 2;;
-  -*)        pl_die "audit-sweep: unknown arg $1";;
-  *)         only="$1"; shift;;
+  --dry-run)      dry_run=1; shift;;
+  --repo)         repo="$2"; shift 2;;
+  --stream|-v)    PL_STREAM=1; shift;;     # chatty mode: stream each persona's turn live
+  -*)             pl_die "audit-sweep: unknown arg $1";;
+  *)              only="$1"; shift;;
 esac; done
+PL_STREAM="${PL_STREAM:-0}"
 
 # ── Resolve the role set ──────────────────────────────────────────────────────────────
 roles=()
@@ -58,12 +60,39 @@ fi
 
 # ── Helpers ───────────────────────────────────────────────────────────────────────────
 _valid_rtype() { case "$1" in ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY) return 0;; *) return 1;; esac; }
-# Best-effort extract one JSON value (object or array) from a persona's result text.
+# Best-effort extract one JSON value (object or array) from a persona's result text — tolerant of
+# prose wrappers and ```-fences (models add them despite "ONLY JSON").
 _extract_json() {
   local in; in="$(cat)"
-  printf '%s' "$in" | jq -ce . 2>/dev/null && return 0
-  printf '%s' "$in" | awk '/^```/{f=!f; next} {print}' | jq -ce . 2>/dev/null && return 0
+  printf '%s' "$in" | jq -ce . 2>/dev/null && return 0                          # already clean JSON
+  printf '%s' "$in" | awk '/^```/{f=!f; next} {print}' | jq -ce . 2>/dev/null && return 0  # strip ``` fences
+  printf '%s' "$in" | perl -0777 -ne 'print $& if /(\[.*\]|\{.*\})/s' 2>/dev/null | jq -ce . 2>/dev/null && return 0  # first [...]/{...} block
   return 1
+}
+
+# Invoke a persona and echo its final result text. PL_STREAM=1 streams the turn LIVE to stderr
+# (one line per tool call + text), so a run isn't a silent black box; default is buffered.
+_run_claude() {
+  local agent="$1" allowed="$2" prompt="$3"
+  if [ "${PL_STREAM:-0}" = "1" ]; then
+    local tmp; tmp="$(mktemp)"
+    "$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed \
+        --output-format stream-json --verbose 2>/dev/null | tee "$tmp" | while IFS= read -r ln; do
+      printf '%s' "$ln" | jq -r '
+        if .type=="assistant" then (.message.content[]? |
+            if .type=="tool_use" then "      · \(.name) \(.input.file_path // .input.pattern // .input.command // .input.path // "")"
+            elif .type=="text" and ((.text|length)>0) then "      \(.text[0:200])"
+            else empty end)
+        else empty end' >&2 2>/dev/null
+    done
+    jq -r 'select(.type=="result") | .result // empty' "$tmp" 2>/dev/null | tail -1
+    rm -f "$tmp"
+  else
+    local raw r
+    raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed --output-format json 2>/dev/null)"
+    r="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null)"
+    [ -n "$r" ] && printf '%s' "$r" || printf '%s' "$raw"
+  fi
 }
 
 # Existing OPEN issue titles, fetched once, for dedup so re-sweeps don't refile the same finding.
@@ -83,14 +112,17 @@ sweep_one() {
   prompt="$(printf 'You are sweeping repo %s for work in YOUR domain that is NOT yet tracked as an open issue. Audit the committed state (code, docs, tests, config) with your granted tools. You CANNOT file issues — return findings and the harness files the new ones (duplicate titles are skipped). Return ONLY a JSON array (empty [] if nothing), each item exactly:\n{"title":"<concise issue title>","body":"<the finding as GitHub-flavored markdown: what, where as path:line, why it matters>","record_type":"<ASSESSMENT|BLOCKER>","priority":"<p0|p1|p2|p3>"}\n' "$repo")"
 
   echo "audit-sweep: -> '${persona}' (${name} · ${role}) sweeping ${repo}..." >&2
-  local raw result arr n filed=0 dup=0 i title body rtype prio url num
-  if ! raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed --output-format json 2>/dev/null)"; then
-    echo "audit-sweep: <- '${persona}' claude invocation FAILED" >&2; return
-  fi
-  result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null)"; [ -n "$result" ] || result="$raw"
+  local result arr n filed=0 dup=0 i title body rtype prio url num
+  result="$(_run_claude "$agent" "$allowed" "$prompt")"
   arr="$(printf '%s' "$result" | _extract_json || true)"
   if ! printf '%s' "$arr" | jq -e 'type=="array"' >/dev/null 2>&1; then
-    echo "audit-sweep: <- '${persona}' returned no findings array" >&2; arr="[]"
+    if [ -z "$result" ]; then
+      echo "audit-sweep: <- '${persona}' returned nothing (claude produced no output)" >&2
+    else
+      echo "audit-sweep: <- '${persona}' returned no parseable findings array — raw output below:" >&2
+      printf '%s\n' "$result" | sed 's/^/    | /' | head -40 >&2
+    fi
+    arr="[]"
   fi
   n="$(printf '%s' "$arr" | jq 'length')"
   for ((i=0; i<n; i++)); do

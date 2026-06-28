@@ -122,3 +122,50 @@ SH
   [ "$status" -eq 0 ]
   if grep -q "REAL CLAUDE CALLED" "$PL_CLAUDE_LOG"; then false; fi
 }
+
+# ── Chatty mode + robust parsing (operability) ────────────────────────────────────────
+
+@test "audit-sweep: extracts findings even when the model wraps them in prose" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"Sure! Here is what I found:\\n[{\\"title\\":\\"Prose-wrapped finding\\",\\"body\\":\\"b\\",\\"record_type\\":\\"ASSESSMENT\\",\\"priority\\":\\"p3\\"}]\\nLet me know if you want more."}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  run scripts/audit-sweep.sh technical-writer
+  [ "$status" -eq 0 ]
+  grep -qF "issue create" "$PL_GH_LOG"
+  grep -qF "Prose-wrapped finding" "$PL_GH_LOG"
+  # MUTATION PROOF: drop the perl bracket-extraction fallback → prose-wrapped array unparsed, this fails.
+}
+
+@test "audit-sweep: PL_STREAM streams the turn live AND still files findings" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"docs/x.md"}}]}}'
+printf '%s\n' '{"type":"result","subtype":"success","result":"[{\"title\":\"Streamed finding\",\"body\":\"b\",\"record_type\":\"ASSESSMENT\",\"priority\":\"p3\"}]"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  PL_STREAM=1 run scripts/audit-sweep.sh technical-writer
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qF "Read docs/x.md"      # live tool progress surfaced to the terminal
+  grep -qF "issue create" "$PL_GH_LOG"
+  grep -qF "Streamed finding" "$PL_GH_LOG"
+  # MUTATION PROOF: ignore PL_STREAM (always buffered) → no live "Read docs/x.md" line, this fails.
+}
+
+@test "audit-sweep: dumps the raw output when it cannot parse a findings array" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"I reviewed the docs and everything looks fine, no issues to report."}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  run scripts/audit-sweep.sh technical-writer
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qF "raw output below"
+  echo "$output" | grep -qF "everything looks fine"   # the actual model text is surfaced for debugging
+  if grep -qF "issue create" "$PL_GH_LOG"; then false; fi
+  # MUTATION PROOF: swallow the raw output on parse failure → "raw output below" absent, this fails.
+}
