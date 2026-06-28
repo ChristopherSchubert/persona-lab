@@ -64,7 +64,7 @@ check_bare_scripts() {
 check_plugin_root_fallback() {
   local file="$1"
   local bare_lines
-  bare_lines=$(grep -n '"${CLAUDE_PLUGIN_ROOT}"/' "$file") || true
+  bare_lines=$(grep -Fn '"${CLAUDE_PLUGIN_ROOT}"/' "$file") || true
 
   if [ -n "$bare_lines" ]; then
     echo "Found \"\${CLAUDE_PLUGIN_ROOT}\"/  without :- fallback (should be \"\${CLAUDE_PLUGIN_ROOT:-.}\"/scripts/):"
