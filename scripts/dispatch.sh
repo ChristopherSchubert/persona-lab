@@ -159,7 +159,19 @@ dispatch_one() {
   local issue_number="$1" persona="$2" agent="agents/$2.md" outcome="dispatched"
   local prompt="Operate issue #${issue_number} on repo ${repo}. One bounded unit of work per ADR-0001; \
 post all bus writes via scripts/queue.sh and any PR review via scripts/review.sh."
-  if "$CLAUDE_BIN" -p "$agent" "$prompt"; then outcome="dispatched"; else outcome="failed"; fi
+  # Apply the persona AND enforce its capacity at the invocation (not advisory frontmatter):
+  #   --append-system-prompt-file = the agent file itself, so the run actually "wears" the
+  #             persona instead of receiving the filename as its literal prompt (the old bug).
+  #   --allowedTools = the capacity-derived tool list from the agent's `tools:` frontmatter
+  #             (written by build-agents.sh from config/capability-map.json). In -p mode any
+  #             tool not listed is denied, so a reads-capacity persona literally cannot Edit/Write.
+  local allowed
+  allowed="$(awk -F': ' '/^tools:/{gsub(/, */," ",$2); print $2; exit}' "$agent")"
+  [ -n "$allowed" ] || pl_die "dispatch: no 'tools:' frontmatter in $agent"
+  echo "dispatch: -> #${issue_number} '${persona}' [allowedTools: ${allowed}]" >&2
+  if "$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed; then
+    outcome="dispatched"; else outcome="failed"; fi
+  echo "dispatch: <- #${issue_number} '${persona}': ${outcome}" >&2
   "$here/runlog.sh" append \
     --persona "$persona" \
     --repo    "$repo" \
@@ -176,6 +188,7 @@ post all bus writes via scripts/queue.sh and any PR review via scripts/review.sh
 reader_pids=()
 for line in ${reader_lines[@]+"${reader_lines[@]}"}; do
   rn="${line%%$'\t'*}"; rp="${line#*$'\t'}"
+  echo "dispatch: -> reader #${rn} '${rp}' (background)" >&2
   dispatch_one "$rn" "$rp" >/dev/null 2>&1 &
   reader_pids+=("$!")
 done
