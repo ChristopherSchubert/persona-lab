@@ -103,7 +103,7 @@ Tell the human — not as options, but as statements of fact:
 For each in-scope persona slug, run:
 
 ```bash
-scripts/assign-names.sh <slug> <repo>
+"${CLAUDE_PLUGIN_ROOT:-.}"/scripts/assign-names.sh <slug> <repo>
 ```
 
 Show the proposed name for each persona. Example output:
@@ -136,20 +136,20 @@ test -f .claude/persona-lab/manifest.yml && echo exists || echo absent
   they decline, stop here.
 
 ```bash
-scripts/init.sh --repo <repo> --owner <owner> --personas "<slug:cap,...>"
+"${CLAUDE_PLUGIN_ROOT:-.}"/scripts/init.sh --repo <repo> --owner <owner> --personas "<slug:cap,...>"
 # add --force only if the human confirmed overwriting an existing manifest
 ```
 
 **Step 2 — provision labels**
 
 ```bash
-scripts/setup-labels.sh
+"${CLAUDE_PLUGIN_ROOT:-.}"/scripts/setup-labels.sh
 ```
 
 **Step 3 — generate agent files**
 
 ```bash
-scripts/build-agents.sh
+"${CLAUDE_PLUGIN_ROOT:-.}"/scripts/build-agents.sh
 ```
 
 ---
@@ -161,7 +161,7 @@ Before declaring success, verify that Write/Edit access is confined to the devel
 Run:
 
 ```bash
-scripts/verify-locks.sh
+"${CLAUDE_PLUGIN_ROOT:-.}"/scripts/verify-locks.sh
 ```
 
 This script asserts both:
@@ -192,13 +192,13 @@ If the invariant check passes, report:
 The bootstrap creates a **single-repo install** (grain: single). When a second app appears, run:
 
 ```bash
-scripts/promote.sh --add-repo <name>
+"${CLAUDE_PLUGIN_ROOT:-.}"/scripts/promote.sh --add-repo <name>
 ```
 
 This converts the manifest from single-repo form to platform form (grain: platform, adds `repos:` list with the new member repo). Cross-repo issue operations then use:
 
 ```bash
-scripts/queue.sh <verb> --repo <owner/name>
+"${CLAUDE_PLUGIN_ROOT:-.}"/scripts/queue.sh <verb> --repo <owner/name>
 ```
 
 Platform-tier personas (singleton roles like `product-manager` and `platform-architect`) are then automatically instantiated and can operate across repos.

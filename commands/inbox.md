@@ -18,8 +18,8 @@ project horizon use `/radar`.
 Run both queries against the issue queue:
 
 ```bash
-scripts/queue.sh query --label needs-human:decision
-scripts/queue.sh query --label needs-human:action
+"${CLAUDE_PLUGIN_ROOT:-.}"/scripts/queue.sh query --label needs-human:decision
+"${CLAUDE_PLUGIN_ROOT:-.}"/scripts/queue.sh query --label needs-human:action
 ```
 
 ### Step 2 — Render
@@ -66,7 +66,7 @@ Expandable detail (show on request or if only one item):
 If **both** queries return zero items:
 
 1. Compute `{n}` = the count of open issues that are **not** labelled `needs-human:*` (the work
-   moving on its own) by running `scripts/queue.sh query` without a `needs-human` filter and
+   moving on its own) by running `"${CLAUDE_PLUGIN_ROOT:-.}"/scripts/queue.sh query` without a `needs-human` filter and
    counting the results.
 2. Read the canonical string from `config/copy.json#zero_state` and substitute `{n}` with that
    count. Never print a literal `{n}`.
