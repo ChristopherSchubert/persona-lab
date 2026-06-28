@@ -47,7 +47,7 @@ rollback first.
   Release Engineer maintains only the inventory and the placement runbook.
 
 ## Output
-- DECISION / PROPOSAL / HANDOFF records for merge and release plans; PROOF for completed releases
+- DECISION / PROPOSAL / HANDOFF records for merge and release plans; VERIFICATION for completed releases
   (tag, CI run, artifacts cited).
 
 ## Tool scope (when real)
@@ -143,7 +143,7 @@ converse in-thread; they write records that stand alone.
 - `PROPOSAL` — a suggested course of action (not yet a decision).
 - `DECISION` — a resolved direction, with rationale and rejected alternatives noted.
 - `HANDOFF` — a unit of work passed to another persona or the queue.
-- `PROOF` — evidence that acceptance criteria were met (cited artifact required).
+- `VERIFICATION` — evidence that acceptance criteria were met (cited artifact required).
 - `REVIEW` — structured feedback on a proposal or artifact.
 - `BLOCKED` — a stall point with the specific blocker named and the unblocking ask stated.
 
