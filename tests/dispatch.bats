@@ -175,3 +175,183 @@ SH
   [ "$status" -eq 0 ]
   if grep -q "REAL CLAUDE CALLED" "$PL_CLAUDE_LOG"; then false; fi
 }
+
+# ── Multi-dispatch per cycle (issue #45, Tom's PROPOSAL/DECISION) ──────────────────────
+# Reader/consultant issues (is_writer_persona=false) dispatch up to PL_READONLY_CAP
+# concurrently with NO lock; the writer issue stays serialized (one, foreground, locked).
+
+@test "dispatch: default cap=1 dispatches exactly one reader (today's behaviour)" {
+  # Two ready readers, no PL_READONLY_CAP → default 1 → exactly one dispatched.
+  fake_issues '[
+    {"number":51,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p1"}]},
+    {"number":52,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p2"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  [ "$(grep -c CLAUDE "$PL_CLAUDE_LOG")" -eq 1 ]
+  # highest priority (p1, #51) wins the single slot
+  grep -qF "#51" "$PL_CLAUDE_LOG"
+  if grep -q "claim" "$PL_LOCK_LOG"; then false; fi
+  # MUTATION PROOF: drop "| .[0:cap]" (dispatch all readers) → count becomes 2, this fails.
+}
+
+@test "dispatch: PL_READONLY_CAP=3 with 4 ready readers dispatches exactly 3, no lock" {
+  fake_issues '[
+    {"number":61,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p1"}]},
+    {"number":62,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]},
+    {"number":63,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p2"}]},
+    {"number":64,"title":"r4","labels":[{"name":"state:ready"},{"name":"persona:release-engineer"},{"name":"priority:p3"}]}
+  ]'
+  PL_READONLY_CAP=3 run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  [ "$(grep -c CLAUDE "$PL_CLAUDE_LOG")" -eq 3 ]
+  # the three highest-priority readers, not the p3 straggler
+  grep -qF "#61" "$PL_CLAUDE_LOG"
+  grep -qF "#62" "$PL_CLAUDE_LOG"
+  grep -qF "#63" "$PL_CLAUDE_LOG"
+  if grep -qF "#64" "$PL_CLAUDE_LOG"; then false; fi
+  # NO writer lock claimed for any reader
+  if grep -q "claim" "$PL_LOCK_LOG"; then false; fi
+  # MUTATION PROOF: hardcode cap=1 (ignore PL_READONLY_CAP) → count becomes 1, this fails.
+}
+
+@test "dispatch: readers run concurrently (overlap in time), not serialized" {
+  # Each reader appends START on entry, sleeps, then appends END. If dispatched
+  # concurrently, all three STARTs land before any END (race-free: append-only, no
+  # read-modify-write). Serial execution would interleave START,END,START,END,…
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+echo START >> "$PL_CONC_LOG"
+sleep 0.5
+echo END >> "$PL_CONC_LOG"
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  export PL_CONC_LOG="$(mktemp)"
+  fake_issues '[
+    {"number":71,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p1"}]},
+    {"number":72,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]},
+    {"number":73,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p1"}]}
+  ]'
+  PL_READONLY_CAP=3 run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  first_three="$(head -3 "$PL_CONC_LOG")"
+  rm -f "$PL_CONC_LOG"
+  # all three readers entered (3 STARTs) before any finished — proves overlap.
+  # serial dispatch would yield START\nEND\nSTART as the first three lines.
+  [ "$first_three" = "$(printf 'START\nSTART\nSTART')" ]
+  # MUTATION PROOF: drop the "&" (dispatch readers in foreground) → first three lines
+  # become START,END,START, this fails.
+}
+
+@test "dispatch: writer + readers in one cycle — readers dispatched AND the one writer with lock" {
+  fake_issues '[
+    {"number":80,"title":"writer","labels":[{"name":"state:ready"},{"name":"persona:developer"},{"name":"priority:p1"}]},
+    {"number":81,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]},
+    {"number":82,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p1"}]}
+  ]'
+  PL_READONLY_CAP=3 run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  # the writer dispatched
+  grep -qF "agents/developer.md" "$PL_CLAUDE_LOG"
+  grep -qF "#80" "$PL_CLAUDE_LOG"
+  # both readers dispatched too — same cycle
+  grep -qF "#81" "$PL_CLAUDE_LOG"
+  grep -qF "#82" "$PL_CLAUDE_LOG"
+  # exactly one writer-lock claim (the writer), and a release
+  [ "$(grep -c claim "$PL_LOCK_LOG")" -eq 1 ]
+  grep -q "release" "$PL_LOCK_LOG"
+  # MUTATION PROOF: skip the writer partition (readers only) → "#80"/claim absent, this fails.
+}
+
+@test "dispatch: at most ONE writer per cycle even when two writer issues are ready" {
+  fake_issues '[
+    {"number":90,"title":"w1","labels":[{"name":"state:ready"},{"name":"persona:developer"},{"name":"priority:p1"}]},
+    {"number":91,"title":"w2","labels":[{"name":"state:ready"},{"name":"persona:developer"},{"name":"priority:p2"}]}
+  ]'
+  PL_READONLY_CAP=5 run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  # only the higher-priority writer, exactly one claim
+  grep -qF "#90" "$PL_CLAUDE_LOG"
+  if grep -qF "#91" "$PL_CLAUDE_LOG"; then false; fi
+  [ "$(grep -c claim "$PL_LOCK_LOG")" -eq 1 ]
+  # MUTATION PROOF: take writers with [0:cap] instead of [0:1] → #91 dispatched, this fails.
+}
+
+@test "dispatch: PL_READONLY_HARD_CAP clamps an over-large PL_READONLY_CAP" {
+  # 5 ready readers, cap asks for 5, but hard cap = 2 → exactly 2 dispatched.
+  fake_issues '[
+    {"number":101,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p1"}]},
+    {"number":102,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]},
+    {"number":103,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p1"}]},
+    {"number":104,"title":"r4","labels":[{"name":"state:ready"},{"name":"persona:release-engineer"},{"name":"priority:p1"}]},
+    {"number":105,"title":"r5","labels":[{"name":"state:ready"},{"name":"persona:security-analyst"},{"name":"priority:p1"}]}
+  ]'
+  PL_READONLY_CAP=5 PL_READONLY_HARD_CAP=2 run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  [ "$(grep -c CLAUDE "$PL_CLAUDE_LOG")" -eq 2 ]
+  # MUTATION PROOF: drop the hard-cap clamp (use raw cap) → count becomes 5, this fails.
+}
+
+@test "dispatch: all background readers write run records before exit (no lost records)" {
+  fake_issues '[
+    {"number":111,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p1"}]},
+    {"number":112,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]},
+    {"number":113,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p1"}]}
+  ]'
+  PL_READONLY_CAP=3 run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  ndjson_file="$(find "$PL_RUNS_DIR" -name '*.ndjson' | head -1)"
+  [ -n "$ndjson_file" ]
+  # one dispatch record per reader issue — all present
+  [ "$(grep -c '"trigger":"dispatch"' "$ndjson_file")" -eq 3 ]
+  for n in 111 112 113; do
+    grep -qF "\"issue_number\":$n" "$ndjson_file"
+  done
+}
+
+@test "dispatch: the cycle blocks on its background readers before returning (final wait)" {
+  # `wait` makes the parent block until every background reader finishes. The stub sleeps
+  # 0.6s per reader; concurrent + waited ⇒ the whole cycle takes ≥0.6s. Without the final
+  # `wait`, the parent returns near-instantly while readers run orphaned — exactly the
+  # lost-records race in the real scheduler. (dispatch.sh runs each background reader with
+  # its stdout/stderr closed off the parent pipe, so bats's `run` does not itself block on
+  # the orphans — the elapsed time reflects the script's own `wait`, not the harness.)
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+sleep 0.6
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":131,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p1"}]},
+    {"number":132,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]},
+    {"number":133,"title":"r3","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p1"}]}
+  ]'
+  start="$(date +%s%N)"
+  PL_READONLY_CAP=3 run scripts/dispatch.sh
+  end="$(date +%s%N)"
+  [ "$status" -eq 0 ]
+  elapsed_ms=$(( (end - start) / 1000000 ))
+  # ≥ 500ms ⇒ the script waited for the 0.6s readers (concurrent, so not 1.8s).
+  [ "$elapsed_ms" -ge 500 ]
+  # MUTATION PROOF: remove the final `wait` → the parent returns in <500ms (readers
+  # orphaned, records race the next cycle); elapsed drops below the floor, this fails.
+}
+
+@test "dispatch: multi-dispatch never calls the real claude binary either" {
+  fake_issues '[
+    {"number":121,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p1"}]},
+    {"number":122,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]}
+  ]'
+  cat > "$PL_TEST_BIN/claude" <<'SH'
+#!/usr/bin/env bash
+echo "REAL CLAUDE CALLED" >> "$PL_CLAUDE_LOG"
+exit 99
+SH
+  chmod +x "$PL_TEST_BIN/claude"
+  PL_READONLY_CAP=2 run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  if grep -q "REAL CLAUDE CALLED" "$PL_CLAUDE_LOG"; then false; fi
+  # MUTATION PROOF: invoke `claude` directly instead of "$CLAUDE_BIN" → real-claude marker appears, this fails.
+}
