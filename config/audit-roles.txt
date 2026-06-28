@@ -1,0 +1,18 @@
+# audit-roles.txt — the discovery/audit personas that audit-sweep.sh sends to "go hunt for
+# work" when it is run with no arguments. One persona-slug per line; '#' starts a comment.
+#
+# These are the roles whose value is PROACTIVE: they find work that nobody has filed yet by
+# auditing the committed state (docs drift, untested behaviour, vulns, a11y/privacy gaps,
+# reliability/cost risks, schema conformance, RACI gaps). Reactive roles (developer,
+# product-manager) are NOT here — they work filed, labelled issues via dispatch.sh.
+# Edit freely; `audit-sweep.sh <slug>` can also sweep any single persona on demand.
+technical-writer
+security-analyst
+qa-analyst
+accessibility-analyst
+privacy-analyst
+reliability-engineer
+design-analyst
+data-architect
+finops
+delivery-manager
