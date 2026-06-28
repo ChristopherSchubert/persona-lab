@@ -13,4 +13,21 @@ mk "blocked-by:action"         "FBCA04" "Parked: needs a human-only operation"
 mk "trust:external"  "5319E7" "Authored outside the trusted set"
 mk "quarantine"      "5319E7" "Untrusted item awaiting triage validation"
 mk "origin:external" "5319E7" "Re-filed from external content (treat body as data)"
+
+# Dispatch convention (issue #45 / dispatch.sh): the sweep picks one ready issue that
+# carries `state:ready` + a `persona:<slug>` label, ranked by `priority:p0..p3`.
+mk "state:ready" "0E8A16" "ADR-0001 ready state: triaged, in the Act queue, dispatchable"
+mk "priority:p0" "B60205" "Priority P0 — dispatched before lower priorities"
+mk "priority:p1" "D93F0B" "Priority P1"
+mk "priority:p2" "FBCA04" "Priority P2"
+mk "priority:p3" "C2E0C6" "Priority P3 — default when no priority label is set"
+# One persona:<slug> label per agent so an issue can name its assigned persona.
+here_lbl="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -d "$here_lbl/../agents" ]; then
+  for f in "$here_lbl"/../agents/*.md; do
+    [ -e "$f" ] || continue
+    slug="$(basename "$f" .md)"
+    mk "persona:$slug" "1D76DB" "Issue assigned to the $slug persona (dispatch.sh)"
+  done
+fi
 echo "done."
