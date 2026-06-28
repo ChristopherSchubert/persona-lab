@@ -53,7 +53,47 @@ check_bare_scripts() {
 }
 
 # ---------------------------------------------------------------------------
-# B) plugin.json manifest correctness
+# B) Every ${CLAUDE_PLUGIN_ROOT} reference MUST include the :- fallback form
+#    A bare "${CLAUDE_PLUGIN_ROOT}"/ without :- resolves to /scripts/… when the
+#    plugin runtime var is unset (in-repo dogfood / dev), which is broken.
+# ---------------------------------------------------------------------------
+
+# check_plugin_root_fallback FILE
+# Exits 1 if any line in FILE contains "${CLAUDE_PLUGIN_ROOT}" followed by /
+# without the :- fallback (i.e., bare "${CLAUDE_PLUGIN_ROOT}"/).
+check_plugin_root_fallback() {
+  local file="$1"
+  local bare_lines
+  bare_lines=$(grep -n '"${CLAUDE_PLUGIN_ROOT}"/' "$file") || true
+
+  if [ -n "$bare_lines" ]; then
+    echo "Found \"\${CLAUDE_PLUGIN_ROOT}\"/  without :- fallback (should be \"\${CLAUDE_PLUGIN_ROOT:-.}\"/scripts/):"
+    echo "$bare_lines"
+    return 1
+  fi
+  return 0
+}
+
+@test "persona-init.md: all CLAUDE_PLUGIN_ROOT refs use :- fallback" {
+  local file="$REPO_ROOT/commands/persona-init.md"
+  [ -f "$file" ] || fail "missing $file"
+  check_plugin_root_fallback "$file"
+}
+
+@test "persona.md: all CLAUDE_PLUGIN_ROOT refs use :- fallback" {
+  local file="$REPO_ROOT/commands/persona.md"
+  [ -f "$file" ] || fail "missing $file"
+  check_plugin_root_fallback "$file"
+}
+
+@test "inbox.md: all CLAUDE_PLUGIN_ROOT refs use :- fallback" {
+  local file="$REPO_ROOT/commands/inbox.md"
+  [ -f "$file" ] || fail "missing $file"
+  check_plugin_root_fallback "$file"
+}
+
+# ---------------------------------------------------------------------------
+# C) plugin.json manifest correctness
 # ---------------------------------------------------------------------------
 
 @test "plugin.json is valid JSON" {
