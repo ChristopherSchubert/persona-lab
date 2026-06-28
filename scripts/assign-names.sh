@@ -29,6 +29,7 @@ case "$slug" in
   lead-engineer)        title="Lead Engineer" ;;
   platform-architect)   title="Platform Architect" ;;
   enterprise-architect) title="Enterprise Architect" ;;
+  delivery-manager)     title="Delivery Manager" ;;
   data-architect)       title="Data Architect" ;;
   head-of-security)     title="Head of Security" ;;
   head-of-qa)           title="Head of QA" ;;

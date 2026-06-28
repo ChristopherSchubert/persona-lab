@@ -9,6 +9,7 @@ engagement:
   lead-engineer:      { capacity: audits }
   platform-architect: { capacity: owns }
   enterprise-architect: { capacity: owns }
+  delivery-manager:   { capacity: reads }
   data-architect:     { capacity: owns }
   head-of-security:   { capacity: owns }
   security-analyst:   { capacity: audits }

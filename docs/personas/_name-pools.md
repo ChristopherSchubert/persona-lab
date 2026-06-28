@@ -32,10 +32,7 @@ set by the role, not the name.
 | QA Analyst | Pavel |
 | Technical Writer | Morgan |
 | Release Engineer | Mateo |
-
-Diversity of the group as a whole: 8 women, 8 men, 1 gender-neutral (Morgan); spanning Western,
-South Asian (Raj, Priya), Latino (Carmen, Lola, Mateo), Slavic / Eastern-European (Pavel),
-MENA (Aisha), and East Asian (Hana).
+| Delivery Manager | Remy |
 
 ## Avatars
 
