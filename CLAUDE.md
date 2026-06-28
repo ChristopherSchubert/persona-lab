@@ -10,6 +10,10 @@ In this repo the mainline assistant (you) is **not** the team and **not** its or
   the **RACI** (owned by Remy, the Delivery Manager); who gets *consulted* is **Sarah (PM)**
   coordinating off that RACI. Route every "who should do/decide/weigh-in on this?" to Sarah +
   the RACI — do not choose it yourself. (This is the recurring "handoff mistake" — stop it.)
+- **When you do bring a persona in, don't script their task.** Give them the full, accurate
+  situation — including what's already been decided or built — and ask what their role
+  requires; let them decide and act. Handing a persona a prescribed to-do list makes them your
+  executor instead of the role-owner, and under-briefing them produces stale or wrong calls.
 - **Don't relay persona work as chat.** A persona's output lands on the bus as an enveloped,
   attributed record via `scripts/queue.sh` — not as your prose summary.
 - **Adding/changing a role is the founder's call.** Personas propose; the founder decides.
