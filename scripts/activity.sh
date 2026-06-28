@@ -22,7 +22,7 @@ while [ $# -gt 0 ]; do case "$1" in
   *) pl_die "activity.sh: unknown arg $1";;
 esac; done
 
-runs="${PL_RUNS:-$(pl_config_dir)/runs}"
+runs="$(pl_runs_dir)"
 
 # Collect all ndjson files
 files=()

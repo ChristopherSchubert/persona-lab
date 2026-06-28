@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.sh"
-runs="${PL_RUNS:-$(pl_config_dir)/runs}"; mkdir -p "$runs"
+runs="$(pl_runs_dir)"; mkdir -p "$runs"
 [ "${1:-}" = "append" ] || pl_die "usage: runlog.sh append --persona .. --repo .. --trigger .. --outcome .. [--tokens N] [--role R] [--action A] [--record-type T] [--artifact-url U] [--parent-id P] [--issue-number N]"
 shift
 persona="" repo="" trigger="" outcome="" tokens=0

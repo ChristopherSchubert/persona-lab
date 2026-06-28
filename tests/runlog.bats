@@ -1,4 +1,23 @@
 setup() { export PL_RUNS="$(mktemp -d)/runs"; }
+
+@test "runlog: honors PL_RUNS_DIR override (test isolation)" {
+  dir="$(mktemp -d)/isolated"
+  run env PL_RUNS_DIR="$dir" PL_RUNS="" scripts/runlog.sh append \
+    --persona Ben --repo finances --trigger summon --outcome acted
+  [ "$status" -eq 0 ]
+  line="$(tail -1 "$dir/$(date -u +%F).ndjson")"
+  echo "$line" | jq -e '.persona == "Ben"'
+}
+
+@test "runlog: PL_RUNS_DIR takes precedence over PL_RUNS" {
+  win="$(mktemp -d)/win"; lose="$(mktemp -d)/lose"
+  run env PL_RUNS_DIR="$win" PL_RUNS="$lose" scripts/runlog.sh append \
+    --persona Ben --repo finances --trigger summon --outcome acted
+  [ "$status" -eq 0 ]
+  [ -f "$win/$(date -u +%F).ndjson" ]
+  if [ -f "$lose/$(date -u +%F).ndjson" ]; then false; fi
+}
+
 @test "runlog: appends a valid NDJSON record with persona+repo+outcome" {
   run scripts/runlog.sh append --persona Ben --repo finances --trigger summon --outcome acted --tokens 1200
   [ "$status" -eq 0 ]

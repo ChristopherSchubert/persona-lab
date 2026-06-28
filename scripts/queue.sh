@@ -32,7 +32,7 @@ pl_envelope() { # persona tier type body
 _bus_record() {
   local persona="$1" action="$2" issue_num="$3" artifact_url="${4:-}"
   local runs repo
-  runs="${PL_RUNS:-$(pl_config_dir)/runs}"
+  runs="$(pl_runs_dir)"
   repo="$(pl_manifest_get repo 2>/dev/null || echo "")"
   local args=(append
     --persona "$persona"

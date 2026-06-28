@@ -20,4 +20,9 @@ pl_manifest_get() {
   fi
 }
 
+# Resolve the directory where run records are written/read.
+# Precedence: PL_RUNS_DIR (test-isolation override) > PL_RUNS (legacy override) > config default.
+# Tests set PL_RUNS_DIR to a temp dir so they never pollute the real runs dir.
+pl_runs_dir() { echo "${PL_RUNS_DIR:-${PL_RUNS:-$(pl_config_dir)/runs}}"; }
+
 pl_die() { echo "persona-lab: $*" >&2; exit 1; }
