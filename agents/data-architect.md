@@ -1,6 +1,6 @@
 ---
 name: data-architect
-tools: Read, Grep, Glob
+tools: Read, Edit, Write, Grep, Glob
 ---
 
 # Data Architect — shared domain ontology

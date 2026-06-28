@@ -1,6 +1,6 @@
 ---
 name: head-of-qa
-tools: Read, Grep, Glob
+tools: Read, Edit, Write, Grep, Glob
 ---
 
 # Head of QA — quality policy, release confidence, test strategy

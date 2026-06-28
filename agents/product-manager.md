@@ -1,6 +1,6 @@
 ---
 name: product-manager
-tools: Read, Grep, Glob
+tools: Read, Edit, Write, Grep, Glob
 ---
 
 # Product Manager — portfolio roadmap, human funnel, acceptance audit

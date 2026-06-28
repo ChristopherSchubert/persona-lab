@@ -1,6 +1,6 @@
 ---
 name: marketing
-tools: Read, Grep, Glob
+tools: Read, Edit, Write, Grep, Glob
 ---
 
 # Marketing — positioning, launch narrative, audience fit

@@ -1,6 +1,6 @@
 ---
 name: head-of-design
-tools: Read, Grep, Glob
+tools: Read, Edit, Write, Grep, Glob
 ---
 
 # Head of Design — design system, cross-app coherence

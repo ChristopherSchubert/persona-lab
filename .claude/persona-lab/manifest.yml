@@ -4,22 +4,22 @@ bus: github-issues
 repo: persona-lab
 engagement:
   developer:          { capacity: writes }
-  product-manager:    { capacity: owns }
+  product-manager:    { capacity: doc-writes }
   product-analyst:    { capacity: owns }
   lead-engineer:      { capacity: audits }
-  platform-architect: { capacity: owns }
-  enterprise-architect: { capacity: owns }
-  delivery-manager:   { capacity: reads }
-  data-architect:     { capacity: owns }
-  head-of-security:   { capacity: owns }
+  platform-architect: { capacity: doc-writes }
+  enterprise-architect: { capacity: doc-writes }
+  delivery-manager:   { capacity: doc-writes }
+  data-architect:     { capacity: doc-writes }
+  head-of-security:   { capacity: doc-writes }
   security-analyst:   { capacity: audits }
-  head-of-qa:         { capacity: owns }
+  head-of-qa:         { capacity: doc-writes }
   qa-analyst:         { capacity: audits }
-  head-of-design:     { capacity: owns }
+  head-of-design:     { capacity: doc-writes }
   design-analyst:     { capacity: audits }
   finops:             { capacity: owns }
-  marketing:          { capacity: owns }
-  technical-writer:   { capacity: audits }
+  marketing:          { capacity: doc-writes }
+  technical-writer:   { capacity: doc-writes }
   release-engineer:   { capacity: audits }
   reliability-engineer: { capacity: reads }
   accessibility-analyst: { capacity: reads }

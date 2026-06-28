@@ -1,6 +1,6 @@
 ---
 name: technical-writer
-tools: Read, Grep, Glob, Bash
+tools: Read, Edit, Write, Grep, Glob
 ---
 
 # Technical Writer — platform documentation clarity and developer-facing explanation
