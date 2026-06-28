@@ -22,25 +22,28 @@ repo: persona-lab
 # engagement: the roster of active personas for this instance.
 #   Keys are persona slugs matching agents/<slug>.md and docs/personas/<slug>.md.
 #   Each entry carries:
-#     capacity: one of writes | owns | audits | advises | reads  (see config/capability-map.json)
+#     capacity: one of writes | doc-writes | owns | audits | advises | reads  (see config/capability-map.json)
 #     trigger:  (optional) what wakes this persona — omit to rely on explicit /persona invocations.
 #
 #   Capacity drives the agent tools whitelist (config/capability-map.json):
-#     writes   — Read, Edit, Write, Bash, Grep, Glob  (Developer persona ONLY — codebase mutations)
-#     owns     — Read, Grep, Glob                     (domain owner; shapes strategy, files issues)
-#     audits   — Read, Grep, Glob, Bash               (reviewer; can run read-only shell checks)
-#     advises  — Read, Grep, Glob                     (advisor; read-only, proposes but does not act)
-#     reads    — Read, Grep, Glob                     (observer; read-only, no bus writes)
+#     writes     — Read, Edit, Write, Bash, Grep, Glob  (Developer ONLY — the sole CODE writer)
+#     doc-writes — Read, Edit, Write, Grep, Glob        (doc-authoring roles — edit docs, NO shell)
+#     owns       — Read, Grep, Glob                     (domain owner; shapes strategy, files issues)
+#     audits     — Read, Grep, Glob, Bash               (reviewer; can run read-only shell checks)
+#     advises    — Read, Grep, Glob                     (advisor; read-only, proposes but does not act)
+#     reads      — Read, Grep, Glob                     (observer; read-only, no bus writes)
 #
-#   Only ONE persona may hold the `writes` capacity. All others are readers in terms of codebase
-#   access; their bus operations are mediated by the launcher (scripts/queue.sh verbs).
+#   Only ONE persona may hold `writes` (the code writer; the only role with both Write and Bash).
+#   MULTIPLE may hold `doc-writes` (Write/Edit, no Bash) — the committed roster is
+#   config/doc-writers.txt and scripts/verify-locks.sh audits it. All non-code-writer bus
+#   operations are mediated by the launcher (scripts/queue.sh verbs).
 engagement:
   developer:
     capacity: writes
     # trigger: explicit dispatch only; never auto-woken.
 
   product-manager:
-    capacity: owns
+    capacity: doc-writes
     # trigger: new needs-human:decision items on the bus.
 
   product-analyst:
@@ -52,28 +55,28 @@ engagement:
     # trigger: REVIEW requests filed by the Developer.
 
   platform-architect:
-    capacity: owns
+    capacity: doc-writes
 
   enterprise-architect:
-    capacity: owns
+    capacity: doc-writes
 
   data-architect:
-    capacity: owns
+    capacity: doc-writes
 
   head-of-security:
-    capacity: owns
+    capacity: doc-writes
 
   security-analyst:
     capacity: audits
 
   head-of-qa:
-    capacity: owns
+    capacity: doc-writes
 
   qa-analyst:
     capacity: audits
 
   head-of-design:
-    capacity: owns
+    capacity: doc-writes
 
   design-analyst:
     capacity: audits
@@ -82,10 +85,10 @@ engagement:
     capacity: owns
 
   marketing:
-    capacity: owns
+    capacity: doc-writes
 
   technical-writer:
-    capacity: audits
+    capacity: doc-writes
 
   release-engineer:
     capacity: audits

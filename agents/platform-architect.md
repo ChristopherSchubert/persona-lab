@@ -1,6 +1,6 @@
 ---
 name: platform-architect
-tools: Read, Grep, Glob
+tools: Read, Edit, Write, Grep, Glob
 ---
 
 # Platform Architect — cross-app contracts & environment truth

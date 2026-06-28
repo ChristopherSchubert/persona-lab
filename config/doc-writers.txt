@@ -1,0 +1,22 @@
+# doc-writers.txt — the committed roster of personas granted the `doc-writes` capacity
+# (Read, Edit, Write, Grep, Glob — Write/Edit but NO Bash). This is the source of truth
+# verify-locks.sh audits against, so the access model is reproducible from the repo even
+# though the live instance manifest (.claude/persona-lab/manifest.yml) is not committed.
+#
+# Invariant (verify-locks.sh):
+#   - developer (the sole CODE writer)      : has Write + Edit + Bash
+#   - every slug listed below (doc-writers) : has Write + Edit, and NO Bash
+#   - every other agent                     : has neither Write nor Edit
+#
+# One persona-slug per line; '#' starts a comment. To grant doc-writes to a role, add it
+# here AND set its capacity to `doc-writes` in the manifest, then run build-agents.sh.
+technical-writer
+data-architect
+platform-architect
+enterprise-architect
+head-of-security
+product-manager
+delivery-manager
+head-of-qa
+head-of-design
+marketing

@@ -1,6 +1,6 @@
 ---
 name: delivery-manager
-tools: Read, Grep, Glob
+tools: Read, Edit, Write, Grep, Glob
 ---
 
 # Delivery Manager — RACI, handoff integrity, execution discipline

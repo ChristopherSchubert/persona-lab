@@ -1,6 +1,6 @@
 ---
 name: enterprise-architect
-tools: Read, Grep, Glob
+tools: Read, Edit, Write, Grep, Glob
 ---
 
 # Enterprise Architect — cross-domain operating model, system coherence, and cross-cohort adoptability
