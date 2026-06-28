@@ -11,6 +11,7 @@
   [ "$(scripts/assign-names.sh developer anyrepo)" = "Doug" ]
   [ "$(scripts/assign-names.sh qa-analyst anyrepo)" = "Pavel" ]
   [ "$(scripts/assign-names.sh technical-writer anyrepo)" = "Morgan" ]
+  [ "$(scripts/assign-names.sh delivery-manager anyrepo)" = "Remy" ]
 }
 @test "assign-names: unknown persona fails" {
   run scripts/assign-names.sh bogus finances; [ "$status" -ne 0 ]
