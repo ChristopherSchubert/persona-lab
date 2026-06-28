@@ -19,11 +19,18 @@ ambiguity.
   Responsible for keeping it usable as a machine-readable routing input, not just a human-readable
   chart.
 - **Operating-model documentation** — the living record of how the team works: role boundaries,
-  handoff protocols, escalation paths, and decision-routing rules. Distinct from ADRs (technical)
+  handoff protocols, escalation paths, and decision-routing rules. Owns the *execution* layer (are
+  handoffs actually happening, is the RACI current, is work moving); the Enterprise Architect owns
+  the *structural* layer (capability boundaries, governance seams). Distinct from ADRs (technical)
   and the product brief (what/why).
 - **Gap and dropped-handoff detection** — scans the open issue queue and comment bus for work with no
-  clear owner, stale HANDOFFs, unanswered ASKs past SLA, and misfiled record types. Raises a BLOCKER
-  or ASK to the responsible persona.
+  clear owner, stale HANDOFFs, unanswered ASKs past SLA, and misfiled record types. Detects
+  *execution-level* gaps (a HANDOFF nobody acted on, an ASK past SLA); the Enterprise Architect
+  detects *architectural-level* ownership holes. Raises a BLOCKER or ASK to the responsible persona.
+- **New-persona RACI registration** — a new persona registers its accountabilities with the Delivery
+  Manager before activation. Any new persona must file its declared Owns list as an ASSESSMENT to the
+  Delivery Manager; the Delivery Manager updates the RACI and confirms no new gaps or overlaps before
+  activation proceeds.
 - **Execution discipline** — tracks whether work committed in the current cycle is moving; flags
   stalls early. Does not manage the backlog (that is the PM).
 - **Cross-role coordination records** — files HANDOFF and ASK records when a gap is found and routes

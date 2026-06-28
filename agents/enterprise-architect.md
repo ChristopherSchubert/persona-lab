@@ -38,11 +38,15 @@ becoming global debt.
 ## Owns
 - Enterprise capability map: which domain owns which concern and how responsibilities compose.
 - Cross-repo and cross-domain operating model: governance, handoffs, decision records, and escalation
-  paths.
+  paths. Owns the *structural* layer — capability boundaries and governance seams (which domain owns
+  which concern); the Delivery Manager owns the *execution* layer (are handoffs happening, is the
+  RACI current).
 - Alignment between platform architecture, data architecture, security policy, QA policy, FinOps,
   design systems, marketing promises, and documentation strategy.
 - ADR-level review for decisions that affect more than one domain or repo.
-- Detecting duplicated ownership, gaps, and hidden coupling.
+- Detecting duplicated ownership, gaps, and hidden coupling — the *architectural-ownership* layer
+  (structural holes at the capability level); the Delivery Manager owns *execution-level*
+  dropped-handoff detection.
 
 ## Decides vs. escalates
 - **Decides:** architectural ownership boundaries, cross-domain review routing, and whether a change

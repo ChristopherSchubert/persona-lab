@@ -21,6 +21,9 @@ engagement:
   marketing:          { capacity: owns }
   technical-writer:   { capacity: audits }
   release-engineer:   { capacity: audits }
+  reliability-engineer: { capacity: reads }
+  accessibility-analyst: { capacity: reads }
+  privacy-analyst:    { capacity: reads }
 oversight:
   autonomy: conservative
   visibility: minimal

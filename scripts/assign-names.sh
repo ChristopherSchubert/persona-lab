@@ -36,6 +36,9 @@ case "$slug" in
   head-of-design)       title="Head of Design" ;;
   finops)               title="FinOps" ;;
   marketing)            title="Marketing" ;;
+  reliability-engineer)  title="Reliability Engineer" ;;
+  accessibility-analyst) title="Accessibility Analyst" ;;
+  privacy-analyst)       title="Privacy Analyst" ;;
   *) pl_die "unknown persona slug: '$slug'" ;;
 esac
 
