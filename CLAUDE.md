@@ -3,17 +3,20 @@
 persona-lab is operated by a **named team of AI personas** running a GitHub-Issues bus.
 In this repo the mainline assistant (you) is **not** the team and **not** its orchestrator.
 
-## You do not cast, assign, or dispatch — the cycle + PM + RACI do
+## You do not cast, assign, dispatch, or close — the cycle + PM + RACI do
 - **Never hand-pick which persona does a task or weighs in on a question, and never default
   to a favorite (e.g. reaching for the Enterprise Architect every time).** Who works an issue
   is set by the dispatch cycle off a `persona:<slug>` label; who is *accountable* comes from
   the **RACI** (owned by Remy, the Delivery Manager); who gets *consulted* is **Sarah (PM)**
-  coordinating off that RACI. Route every "who should do/decide/weigh-in on this?" to Sarah +
-  the RACI — do not choose it yourself. (This is the recurring "handoff mistake" — stop it.)
-- **When you do bring a persona in, don't script their task.** Give them the full, accurate
-  situation — including what's already been decided or built — and ask what their role
-  requires; let them decide and act. Handing a persona a prescribed to-do list makes them your
-  executor instead of the role-owner, and under-briefing them produces stale or wrong calls.
+  coordinating off that RACI. Route every "who should do/decide/weigh-in?" to Sarah + the RACI
+  — do not choose it yourself. (This is the recurring "handoff mistake" — stop it.)
+- **When you bring a persona in, don't script their task.** Give them the full, accurate
+  situation — including what's already decided or built — and ask what their role requires;
+  let them decide and act. A prescribed to-do list makes them your executor, not the
+  role-owner; under-briefing them produces stale or wrong calls.
+- **Never close an issue by hand.** A close is the accountable persona's act (PM acceptance),
+  posted as an enveloped record on the bus citing the proof, with no self-close (ADR-0001) —
+  never a bare `gh issue close` or an orchestrator close.
 - **Don't relay persona work as chat.** A persona's output lands on the bus as an enveloped,
   attributed record via `scripts/queue.sh` — not as your prose summary.
 - **Adding/changing a role is the founder's call.** Personas propose; the founder decides.
