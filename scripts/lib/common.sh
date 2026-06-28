@@ -20,4 +20,33 @@ pl_manifest_get() {
   fi
 }
 
+# Resolve the directory where run records are written/read.
+# Precedence: PL_RUNS_DIR (test-isolation override) > PL_RUNS (legacy override) > config default.
+# Tests set PL_RUNS_DIR to a temp dir so they never pollute the real runs dir.
+pl_runs_dir() { echo "${PL_RUNS_DIR:-${PL_RUNS:-$(pl_config_dir)/runs}}"; }
+
+# W1 comment envelope: single-line float (img + name + badge), then `AI` · role, then body.
+# Shared by queue.sh (issue comments/files) and review.sh (PR reviews/comments) so the
+# bus and PR surfaces render identically. tier may be "Tier · Role" — only the Role shows.
+pl_envelope() { # persona tier type body
+  local persona="$1" tier="$2" rtype="$3" body="$4"
+  local slug avatar role color
+  slug="$(printf '%s' "$persona" | tr '[:upper:]' '[:lower:]' | sed 's/é/e/g' | tr -d ' ')"
+  avatar="https://raw.githubusercontent.com/ChristopherSchubert/persona-lab/main/assets/avatars/${slug}/${slug}-64.png"
+  role="${tier#* · }"; [ "$role" = "$tier" ] && role="$tier"
+  case "$rtype" in
+    PROPOSAL|ROUTING)             color=8b5cf6 ;;
+    DECISION)                     color=2563eb ;;
+    PROOF)                        color=16a34a ;;
+    FINDING)                      color=f59e0b ;;
+    HANDOFF)                      color=0891b2 ;;
+    REVIEW|REVIEW_NOTE)           color=06b6d4 ;;
+    BLOCKED|IMPEDIMENT|CHALLENGE) color=dc2626 ;;
+    *)                            color=64748b ;;
+  esac
+  # Approved envelope: single-line float (img + name + badge), then `AI` · role. No <br clear>, no footer.
+  printf '<img src="%s" width="44" align="left"> **%s** <img src="https://img.shields.io/badge/%s-%s?style=flat-square" height="16" align="texttop">\n`AI` · %s\n\n%s\n' \
+    "$avatar" "$persona" "$rtype" "$color" "$role" "$body"
+}
+
 pl_die() { echo "persona-lab: $*" >&2; exit 1; }

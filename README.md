@@ -136,8 +136,9 @@ The same model scales by **grain**:
 .claude-plugin/   plugin.json + marketplace.json
 agents/           built subagents (one per persona; tool whitelist = the access lock)
 commands/         /persona-init, /persona, /inbox
-scripts/          the machinery — lock.sh, gate.sh, queue.sh, dedup.sh, runlog.sh,
-                  build-agents.sh, init.sh, assign-names.sh, promote.sh, watchdog.sh, …
+scripts/          the machinery — lock.sh, gate.sh, queue.sh, review.sh, dispatch.sh,
+                  dedup.sh, runlog.sh, build-agents.sh, init.sh, assign-names.sh,
+                  promote.sh, watchdog.sh, …
 config/           capability-map.json, schemas/ (typed records), copy.json, manifest.example.yml
 docs/personas/    one briefing per persona (human.md is the charter the rest read)
 assets/avatars/   per-individual pixel avatars (one per persona, 4 sizes each)

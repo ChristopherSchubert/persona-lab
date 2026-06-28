@@ -1,4 +1,5 @@
 setup() {
+  export PL_RUNS_DIR="$(mktemp -d)/runs"   # isolate bus run records from the real runs dir
   export PL_TEST_BIN="$(mktemp -d)"; export PATH="$PL_TEST_BIN:$PATH"
   # Minimal gh stub: log all calls.
   # Body vs comments are intentionally separate so the tests can verify

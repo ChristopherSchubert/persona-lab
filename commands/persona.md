@@ -83,6 +83,16 @@ appropriate `scripts/queue.sh` verb on the persona's behalf:
 - `"${CLAUDE_PLUGIN_ROOT:-.}"/scripts/queue.sh close <issue>`
 - `"${CLAUDE_PLUGIN_ROOT:-.}"/scripts/queue.sh query --label <label>`
 
+**PR reviews and PR comments go through `review.sh`, never raw `gh pr review`/`gh pr comment`.**
+This is what puts the W1 envelope (avatar + name + badge, then `AI` · role) on the PR surface and
+writes a `bus:review` run record. The launcher runs it on the persona's behalf:
+
+- `"${CLAUDE_PLUGIN_ROOT:-.}"/scripts/review.sh <pr#> --persona <name> --tier <capacity> --type REVIEW --body "…" --event approve`
+- `… --event request-changes` for a blocking review; `… --event comment` for a non-verdict review.
+- Omit `--event` to leave a plain enveloped PR comment (a review note with no verdict).
+
+Never call `gh pr comment`/`gh pr review` directly — an un-enveloped PR post is a bus violation.
+
 Before filing a new issue, run dedup check:
 ```
 "${CLAUDE_PLUGIN_ROOT:-.}"/scripts/dedup.sh check --persona <name> --rule <rule-slug> --path <file-or-scope> --snippet "<finding>"

@@ -1,9 +1,13 @@
 setup() {
+  export PL_RUNS_DIR="$(mktemp -d)/runs"   # isolate bus run records from the real runs dir
   export PL_TEST_BIN="$(mktemp -d)"; export PATH="$PL_TEST_BIN:$PATH"
   cat > "$PL_TEST_BIN/gh" <<'SH'
 #!/usr/bin/env bash
 echo "GH $*" >> "$PL_GH_LOG"
-case "$1 $2" in "issue create") echo "https://github.com/o/r/issues/42";; esac
+case "$1 $2" in
+  "issue create")  echo "https://github.com/o/r/issues/42";;
+  "issue comment") echo "https://github.com/o/r/issues/42#issuecomment-1";;
+esac
 SH
   chmod +x "$PL_TEST_BIN/gh"; export PL_GH_LOG="$(mktemp)"
 }

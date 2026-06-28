@@ -6,7 +6,7 @@
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.sh"
 
-runs="${PL_RUNS:-$(pl_config_dir)/runs}"
+runs="$(pl_runs_dir)"
 
 # Collect all ndjson files; if none exist, print empty summary and exit cleanly
 files=()

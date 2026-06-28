@@ -34,7 +34,7 @@ threshold="$(date -u -v-"${grace_min}M" +%FT%TZ 2>/dev/null \
   || date -u -d "${grace_min} minutes ago" +%FT%TZ)"
 
 # ── collect ndjson files ──────────────────────────────────────────────────────
-runs="${PL_RUNS:-$(pl_config_dir)/runs}"
+runs="$(pl_runs_dir)"
 files=()
 if [ -d "$runs" ]; then
   while IFS= read -r -d '' f; do
