@@ -47,7 +47,7 @@ rollback first.
   Release Engineer maintains only the inventory and the placement runbook.
 
 ## Output
-- DECISION / PROPOSAL / HANDOFF records for merge and release plans; VERIFICATION for completed releases
+- DECISION / PROPOSAL / HANDOFF records for merge and release plans; DELIVERED for completed releases
   (tag, CI run, artifacts cited).
 
 ## Tool scope (when real)
@@ -139,31 +139,33 @@ All cross-persona communication flows through **typed records** on the issue bus
 converse in-thread; they write records that stand alone.
 
 **Record types:**
-- `FINDING` — an observed fact, anomaly, or risk.
+- `ASSESSMENT` — an observed fact, anomaly, or risk.
 - `PROPOSAL` — a suggested course of action (not yet a decision).
 - `DECISION` — a resolved direction, with rationale and rejected alternatives noted.
 - `HANDOFF` — a unit of work passed to another persona or the queue.
-- `VERIFICATION` — evidence that acceptance criteria were met (cited artifact required).
-- `REVIEW` — structured feedback on a proposal or artifact.
-- `BLOCKED` — a stall point with the specific blocker named and the unblocking ask stated.
+- `DELIVERED` — the work-done record. REQUIRES acceptance artifacts: PR/commit SHA, CI or test status, and staging/migration evidence where applicable. A `DELIVERED` is not a vague status note — without the cited artifacts it does not count as delivered.
+- `REVIEW` — structured feedback (a verdict) on a proposal or artifact.
+- `PUSHBACK` — contests a routing or decision; carries the disputed reference and the proposed alternative.
+- `FEEDBACK` — role-calibration note, captured at project start or on process events.
+- `BLOCKER` — a stall point with the specific blocker named and the unblocking ask stated.
+- `ASK` — an async request for input from another persona or the PM.
+- `REPLY` — a response to an `ASK`.
 
-**Comment envelope format:**
+**Comment envelope format** — the approved render, produced by `pl_envelope` in `scripts/queue.sh`. **Never hand-write it.**
 
-Every bus comment opens with a header line and closes with a collapsed footer:
+A single-line floated header (avatar + name + a record-type **badge**), then a line with the `AI` flag and the role, then the body:
 
 ```
-🤖 **Name** (tier · role) · TYPE
+<img src="…/<slug>/<slug>-64.png" width="44" align="left"> **<Name>** <img src="https://img.shields.io/badge/<TYPE>-<color>?style=flat-square" height="16" align="texttop">
+`AI` · <Role>
 
 <body — structured, cited, no conversational filler>
-
-<details><summary>Model / run metadata</summary>
-model: <model-id>  run: <ISO-timestamp>  tokens: <n>
-</details>
 ```
 
-The header identifies who wrote it, what capacity they hold, and what record type this is.
-The footer is collapsed by default so it doesn't crowd the human-readable view.
+- Avatar **and** badge sit on the **same line** as the name. The float + the badge's `height="16" align="texttop"` keep them aligned. A `<br clear>` or a blank line after the avatar is what caused the two-row offset — never reintroduce them.
+- Record type is a **badge** (colour keyed to the type), not a `<kbd>` chip. No robot emoji. No footer.
+- Row two is `` `AI` · <Role> `` — the role only (no tier chip).
 
-Personas do not reply to each other's comments inline. If a FINDING needs a PROPOSAL in response,
+Personas do not reply to each other's comments inline. If an ASSESSMENT needs a PROPOSAL in response,
 file a new comment (or a new issue) with the correct type header. The bus is append-only; threads
 are not conversations.

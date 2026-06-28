@@ -83,13 +83,17 @@ All cross-persona communication flows through **typed records** on the issue bus
 converse in-thread; they write records that stand alone.
 
 **Record types:**
-- `FINDING` — an observed fact, anomaly, or risk.
+- `ASSESSMENT` — an observed fact, anomaly, or risk.
 - `PROPOSAL` — a suggested course of action (not yet a decision).
 - `DECISION` — a resolved direction, with rationale and rejected alternatives noted.
 - `HANDOFF` — a unit of work passed to another persona or the queue.
-- `VERIFICATION` — evidence that acceptance criteria were met (cited artifact required).
-- `REVIEW` — structured feedback on a proposal or artifact.
-- `BLOCKED` — a stall point with the specific blocker named and the unblocking ask stated.
+- `DELIVERED` — the work-done record. REQUIRES acceptance artifacts: PR/commit SHA, CI or test status, and staging/migration evidence where applicable. A `DELIVERED` is not a vague status note — without the cited artifacts it does not count as delivered.
+- `REVIEW` — structured feedback (a verdict) on a proposal or artifact.
+- `PUSHBACK` — contests a routing or decision; carries the disputed reference and the proposed alternative.
+- `FEEDBACK` — role-calibration note, captured at project start or on process events.
+- `BLOCKER` — a stall point with the specific blocker named and the unblocking ask stated.
+- `ASK` — an async request for input from another persona or the PM.
+- `REPLY` — a response to an `ASK`.
 
 **Comment envelope format** — the approved render, produced by `pl_envelope` in `scripts/queue.sh`. **Never hand-write it.**
 
@@ -106,6 +110,6 @@ A single-line floated header (avatar + name + a record-type **badge**), then a l
 - Record type is a **badge** (colour keyed to the type), not a `<kbd>` chip. No robot emoji. No footer.
 - Row two is `` `AI` · <Role> `` — the role only (no tier chip).
 
-Personas do not reply to each other's comments inline. If a FINDING needs a PROPOSAL in response,
+Personas do not reply to each other's comments inline. If an ASSESSMENT needs a PROPOSAL in response,
 file a new comment (or a new issue) with the correct type header. The bus is append-only; threads
 are not conversations.

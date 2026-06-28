@@ -32,7 +32,7 @@ to advise on local conformance questions.
 
 ## Output
 
-- `FINDING` records per divergence: what drifted, the canonical form, the file/location.
+- `ASSESSMENT` records per divergence: what drifted, the canonical form, the file/location.
 
 ## Tool scope (when real)
 

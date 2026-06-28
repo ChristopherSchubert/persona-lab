@@ -42,7 +42,7 @@ rollback first.
   Release Engineer maintains only the inventory and the placement runbook.
 
 ## Output
-- DECISION / PROPOSAL / HANDOFF records for merge and release plans; VERIFICATION for completed releases
+- DECISION / PROPOSAL / HANDOFF records for merge and release plans; DELIVERED for completed releases
   (tag, CI run, artifacts cited).
 
 ## Tool scope (when real)

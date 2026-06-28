@@ -24,21 +24,21 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "${PL_RUNS_DIR%/runs}"; }
 }
 
 @test "review: request-changes event maps to gh pr review --request-changes" {
-  run scripts/review.sh 7 --persona Priya --tier "T · Head of QA" --type BLOCKED \
+  run scripts/review.sh 7 --persona Priya --tier "T · Head of QA" --type BLOCKER \
       --body "tests missing" --event request-changes
   [ "$status" -eq 0 ]
   grep -q -- "--request-changes" "$PL_GH_LOG"
 }
 
 @test "review: comment event maps to gh pr review --comment" {
-  run scripts/review.sh 7 --persona Priya --tier "T · Head of QA" --type REVIEW_NOTE \
+  run scripts/review.sh 7 --persona Priya --tier "T · Head of QA" --type REVIEW \
       --body "nit" --event comment
   [ "$status" -eq 0 ]
   grep -q -- "--comment" "$PL_GH_LOG"
 }
 
 @test "review: default event (no --event) posts a pr comment, not a review" {
-  run scripts/review.sh 7 --persona Priya --tier "T · Head of QA" --type REVIEW_NOTE --body "fyi"
+  run scripts/review.sh 7 --persona Priya --tier "T · Head of QA" --type REVIEW --body "fyi"
   [ "$status" -eq 0 ]
   grep -q "pr comment 7" "$PL_GH_LOG"
   if grep -q "pr review" "$PL_GH_LOG"; then false; fi
