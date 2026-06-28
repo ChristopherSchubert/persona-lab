@@ -13,6 +13,11 @@
   [ "$(scripts/assign-names.sh technical-writer anyrepo)" = "Morgan" ]
   [ "$(scripts/assign-names.sh delivery-manager anyrepo)" = "Remy" ]
 }
+@test "assign-names: roster-expansion personas resolve to their fixed names" {
+  [ "$(scripts/assign-names.sh reliability-engineer anyrepo)" = "Kai" ]
+  [ "$(scripts/assign-names.sh accessibility-analyst anyrepo)" = "Nadia" ]
+  [ "$(scripts/assign-names.sh privacy-analyst anyrepo)" = "Vera" ]
+}
 @test "assign-names: unknown persona fails" {
   run scripts/assign-names.sh bogus finances; [ "$status" -ne 0 ]
 }

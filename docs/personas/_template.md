@@ -20,3 +20,8 @@ summoned into the owner's session to advise.
 
 ## Tool scope (when real)
 - <read-only? issue tools? no Edit/Write? — make the boundary structural>
+
+## Check-in (activation step)
+- **Mandatory before activation:** file a RACI-registration ASSESSMENT to the Delivery Manager citing
+  your full Owns list. Activation is blocked until the Delivery Manager acknowledges and updates the
+  RACI (confirming no new gaps or overlaps).

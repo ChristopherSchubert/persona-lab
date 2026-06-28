@@ -33,6 +33,9 @@ set by the role, not the name.
 | Technical Writer | Morgan |
 | Release Engineer | Mateo |
 | Delivery Manager | Remy |
+| Reliability Engineer | Kai |
+| Accessibility Analyst | Nadia |
+| Privacy Analyst | Vera |
 
 ## Avatars
 

@@ -22,6 +22,12 @@ exactly why.
   pass.
 - **Engineering standards** — the cross-repo engineering standard (patterns, test discipline, build
   discipline, code quality bar). Sets the standard; the Developer meets it.
+- **Dependency supply-chain hygiene (non-CVE)** — keeping dependencies current for non-CVE updates,
+  lockfile discipline, and version-pinning strategy as an ongoing engineering-standards practice.
+  Distinct from the Security Analyst's known-vulnerability/CVE lane.
+- **Developer experience / tooling (DX)** — onboarding speed for new contributors, local dev setup
+  quality, toolchain friction, and pre-commit hook maintenance as an experience concern. Distinct
+  from CI/CD correctness (→ Release Engineer) and the code-quality bar above.
 - **REVIEW record** — emits a structured `REVIEW` comment with a verdict:
   `approved` / `changes-requested` / `bounce:out-of-scope`. The verdict cites the commit SHA
   evaluated; a push past HEAD invalidates it.
