@@ -37,11 +37,14 @@ pl_envelope() { # persona tier type body
   case "$rtype" in
     PROPOSAL|ROUTING)             color=8b5cf6 ;;
     DECISION)                     color=2563eb ;;
-    VERIFICATION)                 color=16a34a ;;
-    FINDING)                      color=f59e0b ;;
+    DELIVERED)                    color=16a34a ;;
+    ASSESSMENT)                   color=f59e0b ;;
     HANDOFF)                      color=0891b2 ;;
-    REVIEW|REVIEW_NOTE)           color=06b6d4 ;;
-    BLOCKED|IMPEDIMENT|CHALLENGE) color=dc2626 ;;
+    REVIEW)                       color=06b6d4 ;;
+    BLOCKER|PUSHBACK)             color=dc2626 ;;
+    FEEDBACK)                     color=14b8a6 ;;
+    ASK)                          color=d946ef ;;
+    REPLY)                        color=a855f7 ;;
     *)                            color=64748b ;;
   esac
   # Approved envelope: single-line float (img + name + badge), then `AI` · role. No <br clear>, no footer.

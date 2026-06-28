@@ -15,16 +15,28 @@ setup() { source "${BATS_TEST_DIRNAME}/../scripts/lib/common.sh"; }
   [ "$status" -eq 0 ]; [ "$output" = "single" ]
 }
 
-@test "pl_envelope: VERIFICATION record renders the green (16a34a) badge" {
-  run pl_envelope "Doug" "repo · Developer" VERIFICATION "acceptance met"
+@test "pl_envelope: DELIVERED record renders the green (16a34a) badge" {
+  run pl_envelope "Doug" "repo · Developer" DELIVERED "acceptance met"
   [ "$status" -eq 0 ]
-  grep -q "badge/VERIFICATION-16a34a" <<<"$output"
+  grep -qF "badge/DELIVERED-16a34a" <<<"$output" || false
 }
 
-@test "pl_envelope: PROOF is no longer a known record type (falls through to default color)" {
-  run pl_envelope "Doug" "repo · Developer" PROOF "x"
+@test "pl_envelope: VERIFICATION is no longer a known record type (falls through to default color)" {
+  run pl_envelope "Doug" "repo · Developer" VERIFICATION "x"
   [ "$status" -eq 0 ]
-  grep -q "badge/PROOF-64748b" <<<"$output"
+  grep -qF "badge/VERIFICATION-64748b" <<<"$output" || false
+}
+
+@test "pl_envelope: FEEDBACK / ASK / REPLY are known record types (non-default color)" {
+  run pl_envelope "Doug" "repo · Developer" FEEDBACK "calibration"
+  [ "$status" -eq 0 ]
+  if grep -q "badge/FEEDBACK-64748b" <<<"$output"; then false; fi
+  run pl_envelope "Doug" "repo · Developer" ASK "need input"
+  [ "$status" -eq 0 ]
+  if grep -q "badge/ASK-64748b" <<<"$output"; then false; fi
+  run pl_envelope "Doug" "repo · Developer" REPLY "here you go"
+  [ "$status" -eq 0 ]
+  if grep -q "badge/REPLY-64748b" <<<"$output"; then false; fi
 }
 
 @test "pl_manifest_get: nested key without yq fails closed (no silent default)" {

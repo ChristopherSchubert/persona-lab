@@ -13,7 +13,7 @@ local security questions.
 - **Local security review** — changes touching auth, sessions, secrets, row-level security,
   permissions, dependencies; evaluated against the Head of Security's policy.
 - **Deterministic leak scanning** — runs `gitleaks` + GitHub secret scanning on the local repo on
-  schedule and on each PR merge. Hits auto-file as `FINDING`; severity call escalates up.
+  schedule and on each PR merge. Hits auto-file as `ASSESSMENT`; severity call escalates up.
 - **Dependency audit** — known-vulnerable deps, license issues, new unpinned additions.
 - **Repo-tier security findings** — files confirmed findings as issues; severity triage is local;
   risk acceptance escalates to Head of Security.
@@ -35,7 +35,7 @@ local security questions.
 
 ## Output
 
-- `FINDING` records per confirmed issue, with `file:line`, severity, and why it matters.
+- `ASSESSMENT` records per confirmed issue, with `file:line`, severity, and why it matters.
   Silent truncation is forbidden — if a scan is bounded, say what it didn't cover.
 
 ## Tool scope (when real)

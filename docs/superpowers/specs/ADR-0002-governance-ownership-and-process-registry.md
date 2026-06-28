@@ -9,13 +9,13 @@
 ## Context
 
 ADR-0001 settles the issue lifecycle state machine and introduces two governance record types —
-`ROUTING` and `CHALLENGE` — that route contested decisions to their *owner-of-record*. It defers
+`ROUTING` and `PUSHBACK` — that route contested decisions to their *owner-of-record*. It defers
 to this ADR for: (a) the explicit, exhaustive map of which decision class belongs to which
 owner-of-record, and (b) a structured, queryable home for processes that *must* happen — the
 rows whose absence is itself a governance gap.
 
 Without a decision-ownership map, the `ROUTING.rationale` field has nothing to cite, every
-`CHALLENGE` resolution is ad-hoc (power-based rather than rule-based), and there is no
+`PUSHBACK` resolution is ad-hoc (power-based rather than rule-based), and there is no
 authoritative answer to "who decides this?" Without a process registry, calibration, sweep
 liveness, and registry maintenance are undisciplined — they exist in prose but not as
 machine-checkable invariants that the sweep can assert on cadence.
@@ -37,13 +37,13 @@ Two complementary parts:
 #### 1.1 Map table
 
 Each row is a *decision class* — a category of decisions that arise on the bus. The **Owner
-Role** is the owner-of-record who adjudicates a `CHALLENGE` in that class. The **Resolution
+Role** is the owner-of-record who adjudicates a `PUSHBACK` in that class. The **Resolution
 Authority** column names who steps in if the owner-of-record is the challenger, or if the
 first facilitation cycle fails.
 
 | # | Decision Class | Owner Role | Description / Examples | Resolution Authority |
 |---|---|---|---|---|
-| 1 | Terminology / taxonomy | Data Architect | Canonical record names (e.g. `REVIEW_NOTE` vs `FEEDBACK`), label vocabulary, field-name conventions, data-type choices, schema naming | Owner adjudicates; if Owner is challenger → PM facilitates between Data Architect and Platform Architect; human is backstop after two cycles |
+| 1 | Terminology / taxonomy | Data Architect | Canonical record names (e.g. `REVIEW` vs `FEEDBACK`), label vocabulary, field-name conventions, data-type choices, schema naming | Owner adjudicates; if Owner is challenger → PM facilitates between Data Architect and Platform Architect; human is backstop after two cycles |
 | 2 | State-machine / data contracts | Platform Architect + Data Architect (jointly) | State names, transitions, guard conditions, required-field schemas, record field definitions, wire formats | Joint owners must agree; if split → PM facilitates; human is backstop after two cycles |
 | 3 | Product naming / taste / UX copy | Founder (human) | Public-facing names, product voice, brand decisions, persona names and personalities, aesthetic choices | Human is primary; no delegation; PM may prepare a `PROPOSAL` but the `DECISION` is always `DECISION — human` |
 | 4 | Process / workflow | PM | Issue-queue workflow steps, triage rules, facilitation procedures, cadence of human-facing reviews, on-call rotation | PM adjudicates; if PM is challenger → Platform Architect and Data Architect jointly facilitate; human is backstop after two cycles |
@@ -52,13 +52,13 @@ first facilitation cycle fails.
 | 7 | Unclassified | PM (triage) | Any decision whose class is not listed in this map; PM triages to the correct class and routes, or flags a gap issue | PM triages; PM does NOT escalate unclassified decisions directly to Founder — triage first, escalate only if classification itself requires human judgment |
 
 **Gap invariant:** a decision class missing from this map is a flaggable gap — the sweep (or any
-persona) may file a gap issue (`FINDING` record, class: `governance-gap`) against this ADR. A
+persona) may file a gap issue (`ASSESSMENT` record, class: `governance-gap`) against this ADR. A
 missing class is never an implicit assumption; the PM triages the gap issue and proposes a new
 map row via the amendment procedure.
 
 #### 1.2 Resolution authority — full procedure
 
-1. A `CHALLENGE` record is filed against a `ROUTING`, citing the `ROUTING` foreign key, the
+1. A `PUSHBACK` record is filed against a `ROUTING`, citing the `ROUTING` foreign key, the
    `contested_class`, the `proposed_class`, and the `rationale` (must cite this map's row
    numbers).
 2. The `ROUTING.status` moves to `contested`; all action on that routing halts (ADR-0001,
@@ -67,15 +67,15 @@ map row via the amendment procedure.
    sweep cadence. Their ruling is recorded as a `DECISION` record; the `ROUTING.status` moves to
    `resolved`.
 4. If the **challenger is the owner-of-record**, the **PM facilitates** between the two closest
-   owners (nearest adjacent rows in the map). Facilitation cycle 1 is a structured `INPUT_REQUEST`
-   / `INPUT_RESPONSE` exchange with a deadline of two sweep cadences.
+   owners (nearest adjacent rows in the map). Facilitation cycle 1 is a structured `ASK`
+   / `REPLY` exchange with a deadline of two sweep cadences.
 5. If facilitation cycle 1 fails (no agreement after deadline), **facilitation cycle 2** begins
-   with a fresh deadline. The PM files an `IMPEDIMENT` record naming the split.
+   with a fresh deadline. The PM files an `BLOCKER` record naming the split.
 6. If facilitation cycle 2 fails, the **human is the backstop**: the PM files a `PROPOSAL`
    record via the `ADMIT` transition (`needs_human`, `subtype: decision`) with the full options
    and the PM's recommendation. The human's `DECISION — human` record is final and non-appealable
    in that instance.
-7. **The orchestrator may only file a `CHALLENGE` and halt.** The orchestrator never adjudicates
+7. **The orchestrator may only file a `PUSHBACK` and halt.** The orchestrator never adjudicates
    a class, never routes a decision to itself, and never resumes work on a contested routing
    without a `resolved` status on the `ROUTING` record.
 
@@ -88,7 +88,7 @@ The ownership map may only be amended by the Founder (human). Amendment procedur
 2. The human records a `DECISION — human`; the PM updates this ADR in a follow-up commit, records
    the amendment as a new revision line in the header block, and cross-links the issue.
 3. All open `ROUTING` records that cited the amended row must be re-evaluated; the PM files
-   `IMPEDIMENT` records on any that are now misrouted, and `CHALLENGE` records are not required
+   `BLOCKER` records on any that are now misrouted, and `PUSHBACK` records are not required
    for re-routing (the amendment is the authority).
 4. The amendment is effective from the commit timestamp; prior `ROUTING` records that resolved
    under the old map are not retroactively invalidated.
@@ -122,7 +122,7 @@ Each row in the registry has the following fields:
 | `required_record` | SCREAMING_SNAKE | The record type that proves the process ran; must be present in ADR-0001's record taxonomy or declared here |
 | `invariant` | string | A checkable boolean proposition the sweep asserts on cadence; must be falsifiable |
 
-**New record type declared here:** `CALIBRATION_NOTE` — one per in-scope role per `project_init`
+**New record type declared here:** `FEEDBACK` — one per in-scope role per `project_init`
 event; fields: `{role, calibrated_by, timestamp, scope_acknowledged: bool, notes}`. This record
 type is additive to ADR-0001's taxonomy; ADR-0001 is not amended — the taxonomy is extended here
 and both ADRs cross-reference.
@@ -131,8 +131,8 @@ and both ADRs cross-reference.
 
 | process_id | name | owner_role | trigger | cadence / when | required_record | invariant |
 |---|---|---|---|---|---|---|
-| PR-001 | Role calibration | PM | `event: project_init` | Within `init + 5 days` | `CALIBRATION_NOTE` | `∀ role ∈ in_scope_roles → ∃ CALIBRATION_NOTE(role=role, timestamp ≤ init+5d)` — if any role is missing a note past the deadline, sweep escalates that role to `needs_human` (subtype: action, deadline: now + 1 day) |
-| PR-002 | Sweep-liveness watchdog | Platform Architect | `schedule: every sweep_cadence` | Every sweep run | `HANDOFF` (heartbeat variant, `heartbeat: true`) | `∃ HANDOFF(heartbeat=true, timestamp ≥ now − 2×sweep_cadence)` — if no heartbeat record exists within two cadences, the dead-man check fires: an external monitor (cron or GitHub Actions scheduled job) files a `FINDING` record with `blocker_type: infrastructure`, owner: Platform Architect, and the PM escalates to `needs_human`; the sweep is down until confirmed restored |
+| PR-001 | Role calibration | PM | `event: project_init` | Within `init + 5 days` | `FEEDBACK` | `∀ role ∈ in_scope_roles → ∃ FEEDBACK(role=role, timestamp ≤ init+5d)` — if any role is missing a note past the deadline, sweep escalates that role to `needs_human` (subtype: action, deadline: now + 1 day) |
+| PR-002 | Sweep-liveness watchdog | Platform Architect | `schedule: every sweep_cadence` | Every sweep run | `HANDOFF` (heartbeat variant, `heartbeat: true`) | `∃ HANDOFF(heartbeat=true, timestamp ≥ now − 2×sweep_cadence)` — if no heartbeat record exists within two cadences, the dead-man check fires: an external monitor (cron or GitHub Actions scheduled job) files a `ASSESSMENT` record with `blocker_type: infrastructure`, owner: Platform Architect, and the PM escalates to `needs_human`; the sweep is down until confirmed restored |
 | PR-003 | Registry maintenance | PM | `event: map_amendment \| schedule: quarterly` | Within 5 days of any ownership-map amendment; or quarterly review | `DECISION` (registry-review variant) | `∃ DECISION(registry_review=true, timestamp ≤ last_amendment+5d OR timestamp ≤ last_quarterly_review+90d)` — if the registry has not been reviewed within 90 days and no amendment has triggered an earlier review, sweep escalates to `needs_human` (subtype: action, deadline: now + 7 days) |
 | PR-004 | Gap-issue triage | PM | `condition: governance-gap issue filed` | Within one sweep cadence of filing | `DECISION` (gap-triage variant) | `∀ open issue(label=governance-gap) → ∃ DECISION(gap_triage=true, timestamp ≤ filed_at + sweep_cadence)` — untriaged gap issues past one cadence are escalated by the sweep to `needs_human` (subtype: decision, deadline: now + 1 day) |
 
@@ -155,7 +155,7 @@ and both ADRs cross-reference.
 
 4. **PR-001 (calibration) is a prerequisite for all other processes.** No process row may be
    instantiated as a live issue in a project until PR-001's invariant is satisfied (all in-scope
-   roles have `CALIBRATION_NOTE` records). The sweep enforces this ordering: it checks PR-001
+   roles have `FEEDBACK` records). The sweep enforces this ordering: it checks PR-001
    first on each run; if the invariant fails and the deadline has passed, it halts instantiation
    of new process issues until the gap is resolved.
 
@@ -175,7 +175,7 @@ and both ADRs cross-reference.
   "decision_ownership_map": {
     "version": "1.0.0",
     "amendment_authority": "human (Founder)",
-    "gap_record": "FINDING with label governance-gap",
+    "gap_record": "ASSESSMENT with label governance-gap",
     "classes": [
       {
         "id": 1,
@@ -240,7 +240,7 @@ and both ADRs cross-reference.
     "schema_version": "1.0.0",
     "new_record_types": [
       {
-        "name": "CALIBRATION_NOTE",
+        "name": "FEEDBACK",
         "description": "One per in-scope role per project_init; proves the role was calibrated at project start",
         "fields": ["role", "calibrated_by", "timestamp", "scope_acknowledged", "notes"],
         "declared_in": "ADR-0002",
@@ -254,8 +254,8 @@ and both ADRs cross-reference.
         "owner_role": "PM",
         "trigger": {"type": "event", "event": "project_init"},
         "cadence_when": "within init + P5D",
-        "required_record": "CALIBRATION_NOTE",
-        "invariant": "forall role in in_scope_roles: exists CALIBRATION_NOTE where role=role and timestamp <= init+P5D",
+        "required_record": "FEEDBACK",
+        "invariant": "forall role in in_scope_roles: exists FEEDBACK where role=role and timestamp <= init+P5D",
         "on_fail": "sweep escalates missing role to needs_human(subtype=action, deadline=now+P1D)",
         "prerequisite_for": "all other PR rows"
       },
@@ -268,7 +268,7 @@ and both ADRs cross-reference.
         "required_record": "HANDOFF",
         "required_record_variant": {"heartbeat": true},
         "invariant": "exists HANDOFF where heartbeat=true and timestamp >= now - 2*sweep_cadence",
-        "on_fail": "external dead-man check fires FINDING(blocker_type=infrastructure, owner=Platform Architect); PM escalates to needs_human",
+        "on_fail": "external dead-man check fires ASSESSMENT(blocker_type=infrastructure, owner=Platform Architect); PM escalates to needs_human",
         "note": "dead-man check is external to the sweep; its runbook is cross-linked from PR-002 issue instance"
       },
       {
@@ -307,7 +307,7 @@ both ADRs cross-reference. The full effective taxonomy is ADR-0001's table plus 
 
 | Record | Purpose | Declared in |
 |---|---|---|
-| `CALIBRATION_NOTE` | One per in-scope role per `project_init`; fields: `{role, calibrated_by, timestamp, scope_acknowledged: bool, notes}`; proves the role was calibrated at project start | ADR-0002 |
+| `FEEDBACK` | One per in-scope role per `project_init`; fields: `{role, calibrated_by, timestamp, scope_acknowledged: bool, notes}`; proves the role was calibrated at project start | ADR-0002 |
 
 ---
 
@@ -332,14 +332,14 @@ both ADRs cross-reference. The full effective taxonomy is ADR-0001's table plus 
    the amendment procedure (section 1.3). The map version field increments on each amendment.
 
 5. **A gap issue is filed, not silently assumed.** If any persona or the sweep encounters a
-   decision that does not fit any map row, a gap issue is filed (`FINDING`, `label:
+   decision that does not fit any map row, a gap issue is filed (`ASSESSMENT`, `label:
    governance-gap`) before the decision proceeds. No decision proceeds under an implicit
    unmapped class.
 
 ### Process-registry invariants
 
 6. **PR-001 gates all other process instantiation.** Until PR-001's invariant is satisfied (all
-   in-scope roles have `CALIBRATION_NOTE` records within the deadline), no other process row may
+   in-scope roles have `FEEDBACK` records within the deadline), no other process row may
    be instantiated as a live issue.
 
 7. **PR-002's heartbeat is the sweep's proof of life.** The sweep writes a `HANDOFF(heartbeat=true)`
@@ -366,7 +366,7 @@ both ADRs cross-reference. The full effective taxonomy is ADR-0001's table plus 
 ### Benefits
 
 - **`ROUTING` records have a citable authority.** Every `ROUTING.rationale` now has a specific
-  row to cite. `CHALLENGE` resolutions are deterministic — they follow the resolution-authority
+  row to cite. `PUSHBACK` resolutions are deterministic — they follow the resolution-authority
   column, not power dynamics or context volume.
 - **Human escalation is the backstop, not the default.** Class 3 is the only class where the
   human is the *primary* decision-maker. For all other classes, the human is the backstop after
@@ -380,7 +380,7 @@ both ADRs cross-reference. The full effective taxonomy is ADR-0001's table plus 
   dies, PR-002's invariant fails and the dead-man check surfaces the failure. Previously, a dead
   sweep degraded all guarantees silently.
 - **Calibration is a first-class process.** PR-001 ensures every role is explicitly calibrated at
-  project start, not assumed to be from persona briefings. `CALIBRATION_NOTE` records are
+  project start, not assumed to be from persona briefings. `FEEDBACK` records are
   timestamped and queryable.
 
 ### Trade-offs
@@ -397,7 +397,7 @@ both ADRs cross-reference. The full effective taxonomy is ADR-0001's table plus 
   dead-man check (cron or GitHub Actions scheduled job) is a second mechanism that must be
   provisioned and maintained. Its runbook is cross-linked from each PR-002 issue instance; its
   own liveness is an operational concern outside the scope of this ADR.
-- **`CALIBRATION_NOTE` is a new record type declared outside ADR-0001.** This means the full
+- **`FEEDBACK` is a new record type declared outside ADR-0001.** This means the full
   effective taxonomy requires reading both ADRs. The alternative — amending ADR-0001 — would make
   ADR-0001's revision history noisy with every extension. The cross-reference in both ADRs is the
   discoverability mechanism. If the taxonomy grows large, a separate ADR-0004 taxonomy index is

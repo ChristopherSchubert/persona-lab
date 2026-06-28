@@ -31,7 +31,7 @@ and handoff cleanup.
 - Replace proof with prose.
 
 ## Output
-- REVIEW / PROPOSAL / FINDING records for documentation gaps, suggested wording, structure, and
+- REVIEW / PROPOSAL / ASSESSMENT records for documentation gaps, suggested wording, structure, and
   reader-risk.
 
 ## Tool scope (when real)

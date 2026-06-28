@@ -28,7 +28,7 @@ _bus_record() {
 
 case "$cmd" in
   file)
-    persona="" tier="" rtype="FINDING" title="" body="" repoflag=()
+    persona="" tier="" rtype="ASSESSMENT" title="" body="" repoflag=()
     while [ $# -gt 0 ]; do case "$1" in
       --persona) persona="$2"; shift 2;; --tier) tier="$2"; shift 2;;
       --type) rtype="$2"; shift 2;; --title) title="$2"; shift 2;;
@@ -108,7 +108,7 @@ case "$cmd" in
       dependency|coordination|clarification|decision|action) ;;
       *) pl_die "park: blocker_type '$blocker_type' is invalid; must be one of: dependency, coordination, clarification, decision, action";;
     esac
-    # Structured write: embed pl-fields JSON as HTML comment in an IMPEDIMENT comment
+    # Structured write: embed pl-fields JSON as HTML comment in a BLOCKER comment
     # Use jq -n --arg to safely encode values containing " or \
     pl_fields_json="$(jq -n \
       --arg blocker_type "$blocker_type" \
