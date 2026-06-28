@@ -29,7 +29,7 @@ summonable to advise.
 - Treat visual inspection as enough when a deterministic check is possible.
 
 ## Output
-- REVIEW / FINDING / PROOF records with exact repro steps, commands run, artifacts checked, and
+- REVIEW / FINDING / VERIFICATION records with exact repro steps, commands run, artifacts checked, and
   residual risk.
 
 ## Tool scope (when real)

@@ -108,7 +108,7 @@ deadline: now + 1 day) with an `IMPEDIMENT` record citing the stale lock.
 
 **(c) No-self-close enforced at the `CLOSE` transition.**
 The guard on `CLOSE` (from `in_review` → `done`) checks `approver ≠ developer` as a required
-field on the `PROOF` record. The same check is applied at the `in_review` entry: the submitter
+field on the `VERIFICATION` record. The same check is applied at the `in_review` entry: the submitter
 cannot be either the Lead Engineer reviewer or the PM auditor. The enforcement point is the
 transition guard, not a behavioral note.
 
@@ -156,7 +156,7 @@ governance action on the bus.
 | `PROPOSAL` | Structured option set for a human decision; required for `ADMIT` |
 | `DECISION` | A decision reached and recorded (by persona or human) |
 | `HANDOFF` | Lock claim, state hand-off, or blocker-resolution record |
-| `PROOF` | Verification manifest results and artifacts; required for `CLOSE` |
+| `VERIFICATION` | Verification manifest results and artifacts; required for `CLOSE` |
 | `REVIEW_NOTE` | Review verdict (approved or changes-requested) from Lead Engineer or PM gate |
 | `IMPEDIMENT` | Names a blocker impeding progress; required for `PARK`, `REJECT`, `EXPIRE`, `STALE_LOCK` |
 | `INPUT_REQUEST` | Async input request from one persona to another; filed as side record |
@@ -194,10 +194,10 @@ governance action on the bus.
 | `RESUME` | `parked` | `ready` | Blocker cleared (event-triggered or sweep); guard: blocker's resolution cited; writer lock re-acquired as new claim | `HANDOFF` (blocker resolution cited, lock re-claim recorded) |
 | `ADMIT` | `parked` | `needs_human` | PM admits item to human queue; guard: `subtype ∈ {decision, action}`, `deadline` set, completeness package present (decision: options + recommendation; action: runbook with ordered steps + verification) | `PROPOSAL` (complete decision or action package) |
 | `CLAIM` | `ready` | `in_progress` | Developer acquires writer lock (atomic create-only CAS on `persona-lock/<repo>`); guard: lock not already held, fence written, first checkpoint immediately after claim | `HANDOFF` (lock claim record: holder, claimed_at, fence) |
-| `SUBMIT` | `in_progress` | `in_review` | Developer submits for review; guard: verification manifest commands all pass, E2E artifact cited if UI surface touched, diff within `diff_budget` | `PROOF` (manifest run results, artifact paths, commit SHA) |
+| `SUBMIT` | `in_progress` | `in_review` | Developer submits for review; guard: verification manifest commands all pass, E2E artifact cited if UI surface touched, diff within `diff_budget` | `VERIFICATION` (manifest run results, artifact paths, commit SHA) |
 | `BOUNCE` | `in_review` | `ready` | Lead Engineer or PM rejects; guard: verdict ∈ {changes-requested, bounce:out-of-scope}; `REVIEW_NOTE` record present with verdict | `REVIEW_NOTE` (verdict, specific changes required, commit SHA evaluated) |
-| `CLOSE` | `in_review` | `done` | Both gates pass; guard: Lead Engineer `approved` verdict present; PM acceptance verdict present; both cite the same current HEAD SHA; issue is still open on the bus (`state == "open"`); `approver ≠ developer` on `PROOF` record | `PROOF` (final cited artifact, both gate verdicts, commit SHA) |
-| `RESOLVE` | `needs_human` | `ready` or `done` | Human completes decision or action; guard: decision recorded as `DECISION — human`; action verified (env var present / health-check / human-attested with second identity); subtype determines target state | `DECISION` (human decision recorded) or `PROOF` (action completion verified) |
+| `CLOSE` | `in_review` | `done` | Both gates pass; guard: Lead Engineer `approved` verdict present; PM acceptance verdict present; both cite the same current HEAD SHA; issue is still open on the bus (`state == "open"`); `approver ≠ developer` on `VERIFICATION` record | `VERIFICATION` (final cited artifact, both gate verdicts, commit SHA) |
+| `RESOLVE` | `needs_human` | `ready` or `done` | Human completes decision or action; guard: decision recorded as `DECISION — human`; action verified (env var present / health-check / human-attested with second identity); subtype determines target state | `DECISION` (human decision recorded) or `VERIFICATION` (action completion verified) |
 | `EXPIRE` | `needs_human` | `needs_human` | Sweep detects deadline breach; guard: human has not acted; PM extends deadline and re-surfaces | `IMPEDIMENT` (deadline extension, re-surface reason) |
 | `DEDUP` | `proposed`, `ready` | `duplicate` | PM identifies duplicate of an open issue; guard: canonical issue URL cited | `DECISION` (canonical issue URL, dedup rationale) |
 | `STALE_LOCK` (sweep) | `in_progress` | `needs_human` | Sweep: `now − claimed_at > grace AND no heartbeat within heartbeat_interval`; guard: stale condition verified against server-side lock ref | `IMPEDIMENT` (stale lock cited, holder named, last checkpoint timestamp, deadline set to now + 1 day) |
@@ -218,14 +218,14 @@ governance action on the bus.
 
 3. **`done` (with proof) is the only terminal for resolved work.** `declined` and `duplicate` are
    the only other legal closes. An issue cannot be closed by any means that bypasses the `CLOSE`
-   guard (auto-close via commit keywords is disabled; close is always explicit with a `PROOF`
+   guard (auto-close via commit keywords is disabled; close is always explicit with a `VERIFICATION`
    record).
 
 4. **Every wait carries owner + deadline.** `parked`, `needs_human`, and `quarantine` all require
    `owner` and `deadline` as required fields. The transition guard enforces this — transitions
    lacking these fields are rejected by the completeness check.
 
-5. **No self-close.** At `CLOSE`, `approver ≠ developer` is a required-field check on the `PROOF`
+5. **No self-close.** At `CLOSE`, `approver ≠ developer` is a required-field check on the `VERIFICATION`
    record. The `SUBMIT` guard also enforces that the Lead Engineer reviewer and PM auditor are
    distinct identities from the submitter.
 
@@ -427,7 +427,7 @@ stateDiagram-v2
       "from": "in_progress",
       "to": "in_review",
       "guard": "verification_manifest_all_pass AND e2e_artifact_cited_if_ui AND diff_within_budget",
-      "record": "PROOF"
+      "record": "VERIFICATION"
     },
     {
       "name": "BOUNCE",
@@ -441,14 +441,14 @@ stateDiagram-v2
       "from": "in_review",
       "to": "done",
       "guard": "le_approved AND pm_accepted AND le_sha==pm_sha==current_HEAD AND issue_still_open AND approver!=developer",
-      "record": "PROOF"
+      "record": "VERIFICATION"
     },
     {
       "name": "RESOLVE",
       "from": "needs_human",
       "to": ["ready", "done"],
       "guard": "human_acted AND (subtype==decision: DECISION_human_recorded) OR (subtype==action: action_verified)",
-      "record": "DECISION or PROOF"
+      "record": "DECISION or VERIFICATION"
     },
     {
       "name": "EXPIRE",
@@ -507,7 +507,7 @@ stateDiagram-v2
       "description": "Lock claim, state hand-off, or blocker-resolution record"
     },
     {
-      "name": "PROOF",
+      "name": "VERIFICATION",
       "description": "Verification manifest results and artifacts; required for CLOSE"
     },
     {
@@ -543,9 +543,9 @@ stateDiagram-v2
   "invariants": [
     "Every issue is in exactly one state at all times.",
     "Every open state has at least one defined exit transition.",
-    "done (with PROOF) is the only terminal for resolved work; declined and duplicate are the only other legal closes.",
+    "done (with VERIFICATION) is the only terminal for resolved work; declined and duplicate are the only other legal closes.",
     "parked, needs_human, and quarantine require owner and deadline as required fields; transitions lacking these are rejected.",
-    "At CLOSE, approver != developer is a required-field check on the PROOF record.",
+    "At CLOSE, approver != developer is a required-field check on the VERIFICATION record.",
     "At CLOSE, the issue must be open on the bus (state == open); if already closed, CLOSE fails.",
     "At CLOSE, the Lead Engineer approved verdict and PM acceptance verdict must both cite the same current HEAD commit SHA.",
     "An item cannot enter needs_human without a complete package (decision: 6 required fields; action: runbook with 4 required sub-fields); both require subtype and deadline.",

@@ -66,7 +66,7 @@ passes. The gate requires:
 - An approved REVIEW record citing the exact HEAD SHA.
 - The diff within the budget in `.claude/persona-lab/diff_budget.json` (if present).
 
-**A free-text PROOF statement alone does not satisfy the gate.** In Phase 1, the human plays
+**A free-text VERIFICATION statement alone does not satisfy the gate.** In Phase 1, the human plays
 Lead Engineer and emits the REVIEW record; the gate is what is enforced mechanically.
 
 If the gate fails, surface the specific failure message and stop. Do not attempt workarounds.

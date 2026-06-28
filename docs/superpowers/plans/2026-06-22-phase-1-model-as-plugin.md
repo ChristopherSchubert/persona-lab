@@ -258,7 +258,7 @@ git commit -m "feat(queue): file verb with AI comment envelope"
 
 ```bash
 @test "queue comment: appends an enveloped comment to an issue" {
-  run scripts/queue.sh comment 42 --persona Ben --tier "finances Team · Developer" --type PROOF --body "fixed"
+  run scripts/queue.sh comment 42 --persona Ben --tier "finances Team · Developer" --type VERIFICATION --body "fixed"
   [ "$status" -eq 0 ]; grep -q "issue comment 42" "$PL_GH_LOG"
 }
 @test "queue label: adds a label" {
@@ -684,7 +684,7 @@ git commit -m "feat(agents): final roster briefings + generated access-locked ag
 ## Task group V — verification spine (enforceable, not prose)
 
 > **(Added per the go/no-go vote — Greg's HOLD + Sarah.)** Phase 1 must ship the verification/review
-> contract as *tested code*, not briefing prose — otherwise self-closing with a free-text `PROOF` becomes
+> contract as *tested code*, not briefing prose — otherwise self-closing with a free-text `VERIFICATION` becomes
 > the norm from commit one, which is ruinous to retrofit. The human may play Lead Engineer *manually* in
 > Phase 1, but the **deterministic gate** that enforces "verification = manifest + artifact, not
 > attestation" exists and runs. This also freezes the canonical **schema set** (Sarah) as the one source
@@ -819,7 +819,7 @@ git commit -m "feat(gate): deterministic pre-close gate (manifest+artifact+SHA-b
 - Modify: `commands/persona.md` (the Developer's close path)
 - Modify: the E4 acceptance (below)
 
-- [ ] **Step 1:** State in `commands/persona.md` that the Developer **cannot close** until `scripts/gate.sh check --head $(git rev-parse HEAD)` passes; a free-text `PROOF` alone is not a close. In Phase 1 the human emits the `REVIEW` record (playing Lead Engineer) — the *gate* is what's enforced, the reviewer can be manual.
+- [ ] **Step 1:** State in `commands/persona.md` that the Developer **cannot close** until `scripts/gate.sh check --head $(git rev-parse HEAD)` passes; a free-text `VERIFICATION` alone is not a close. In Phase 1 the human emits the `REVIEW` record (playing Lead Engineer) — the *gate* is what's enforced, the reviewer can be manual.
 - [ ] **Step 2: Commit**
 
 ```bash
@@ -946,7 +946,7 @@ Expected: all tests pass.
      and records its fence, works in a worktree, **runs `scripts/lock.sh verify-fence` before integrating**
      (must match), emits a `REVIEW` record (you play Lead Engineer) citing HEAD, and the close is **blocked
      until `scripts/gate.sh check` passes** (verification marker + approved REVIEW on current HEAD + diff
-     budget) — a free-text `PROOF` alone does NOT close. Then it releases the lock.
+     budget) — a free-text `VERIFICATION` alone does NOT close. Then it releases the lock.
   8. Negative check: try to close with no verification marker → `gate.sh` refuses. Try to integrate after
      forcing a fence mismatch → the Developer aborts instead of pushing.
 

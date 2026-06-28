@@ -37,7 +37,7 @@ pl_envelope() { # persona tier type body
   case "$rtype" in
     PROPOSAL|ROUTING)             color=8b5cf6 ;;
     DECISION)                     color=2563eb ;;
-    PROOF)                        color=16a34a ;;
+    VERIFICATION)                 color=16a34a ;;
     FINDING)                      color=f59e0b ;;
     HANDOFF)                      color=0891b2 ;;
     REVIEW|REVIEW_NOTE)           color=06b6d4 ;;

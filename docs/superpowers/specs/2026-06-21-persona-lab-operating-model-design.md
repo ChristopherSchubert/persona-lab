@@ -476,7 +476,7 @@ The "build the failure path first-class" layer; shares the watchdog/reaper with 
   full Lead-Engineer review + browser E2E for code touching contracts/auth/money/migrations or UI
   surfaces; a **deterministic-only gate** (tests + lint + diff-budget + scope-check, no model) for
   chore/trivial closes. E2E runs only when the diff actually touches a UI surface; its **artifacts go to
-  a TTL'd blob/LFS store, not inline git** (traces are MBs; git never forgets), and the `PROOF` cites a
+  a TTL'd blob/LFS store, not inline git** (traces are MBs; git never forgets), and the `VERIFICATION` cites a
   hash/URL.
 - **Event re-entry is debounced.** A blocker clearing that flips N parked children to `ready` (e.g. an
   expand→migrate→contract epic) coalesces into the next single Triage groom, not N simultaneous wakes;
@@ -633,7 +633,7 @@ engagement:
    robust; weigh latency). "Looks done" is not done. Verification is a **manifest + an artifact,
    not an attestation**: each repo declares a verification manifest `{typecheck, lint, test, e2e}`
    of commands the Developer must run, and **E2E produces a file artifact** (screenshot/trace) the
-   close's `PROOF` comment must cite — no artifact, not done. For human **actions** that can't be
+   close's `VERIFICATION` comment must cite — no artifact, not done. For human **actions** that can't be
    auto-verified (a secret the runner can't read back, a vendor-console toggle), the runbook carries a
    **non-revealing verification command** the human runs and pastes the result of (`gh secret list |
    grep NAME` = presence+timestamp, not value; a health-check returning 200); where even that's
@@ -766,7 +766,7 @@ handoff (see "Decisions don't block the cycle"). And **readiness** at Sense (`un
 - **Run-record `outcome`** (`acted · slept · escalated · parked`) = what a *wake* did. A wake that parks
   its item ends `outcome:parked` and moves the item to `parked` (renamed from `blocked` so it matches
   the item state and doesn't collide with the blocker vocabulary).
-- **Comment record-types** (`FINDING · PROPOSAL · DECISION · HANDOFF · PROOF · REVIEW · BLOCKED`) = what a comment
+- **Comment record-types** (`FINDING · PROPOSAL · DECISION · HANDOFF · VERIFICATION · REVIEW · BLOCKED`) = what a comment
   records about a transition.
 
 ### Capacity vocabulary (manifest)
@@ -798,7 +798,7 @@ liveness** labels (`working · at-rest · blocked`) are registered here too, so 
 ## The issue bus discipline
 
 - **Comments are typed, discrete state records — not conversation.** Vocabulary:
-  `FINDING` · `PROPOSAL` · `DECISION` · `HANDOFF` · `PROOF` · `REVIEW` · `BLOCKED`. One
+  `FINDING` · `PROPOSAL` · `DECISION` · `HANDOFF` · `VERIFICATION` · `REVIEW` · `BLOCKED`. One
   self-contained record of a state transition per comment.
 - **Personas do not converse in-thread.** No persona-to-persona dialogue (they already
   never talk directly). A persona posts a finding → PM frames → human decides. Dialogue is

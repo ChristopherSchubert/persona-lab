@@ -83,11 +83,11 @@ You stay the driver. The team runs the queue. Everything the team can close on i
 
 Personas never talk to each other directly. The issue tracker *is* the bus — **open = the live queue, closed = the audit trail**. Every cross-persona message is a **typed record** that stands alone (the next stateless session has none of your context):
 
-`FINDING` · `PROPOSAL` · `DECISION` · `HANDOFF` · `PROOF` · `REVIEW` · `BLOCKED`
+`FINDING` · `PROPOSAL` · `DECISION` · `HANDOFF` · `VERIFICATION` · `REVIEW` · `BLOCKED`
 
 Each comment carries an envelope so a human skimming the thread sees who said what, in what capacity — with their face:
 
-> <img src="assets/avatars/doug/doug-64.png" width="18"> 🤖 **Doug** (repo · Developer) · **PROOF**
+> <img src="assets/avatars/doug/doug-64.png" width="18"> 🤖 **Doug** (repo · Developer) · **VERIFICATION**
 >
 > Added a 60s leeway window to the `iat` check. 14 tests green, including skew cases. Verified against `HEAD a1b2c3d`; diff +18/−4, within budget.
 >

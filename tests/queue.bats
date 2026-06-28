@@ -34,9 +34,9 @@ teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG"; }
 }
 
 @test "queue comment: appends an enveloped comment to an issue" {
-  run scripts/queue.sh comment 42 --persona Ben --tier "finances Team · Developer" --type PROOF --body "fixed"
+  run scripts/queue.sh comment 42 --persona Ben --tier "finances Team · Developer" --type VERIFICATION --body "fixed"
   [ "$status" -eq 0 ]; grep -q "issue comment 42" "$PL_GH_LOG"
-  grep -q "PROOF" "$PL_GH_LOG"
+  grep -q "VERIFICATION" "$PL_GH_LOG"
 }
 
 @test "queue label: adds a label" {
