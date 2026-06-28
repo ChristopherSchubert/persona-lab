@@ -51,7 +51,7 @@ fake_issues() { printf '%s' "$1" > "$PL_FAKE_ISSUES"; }
 @test "dispatch: picks the single ready issue that has a persona label" {
   fake_issues '[
     {"number":10,"title":"no persona","labels":[{"name":"state:ready"}]},
-    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"persona:developer"}]}
+    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
   ]'
   run scripts/dispatch.sh
   [ "$status" -eq 0 ]
@@ -64,8 +64,8 @@ fake_issues() { printf '%s' "$1" > "$PL_FAKE_ISSUES"; }
 
 @test "dispatch: picks higher priority first (priority:p0 beats older p2)" {
   fake_issues '[
-    {"number":5,"title":"old low","labels":[{"name":"state:ready"},{"name":"persona:developer"},{"name":"priority:p2"}]},
-    {"number":9,"title":"new high","labels":[{"name":"state:ready"},{"name":"persona:developer"},{"name":"priority:p0"}]}
+    {"number":5,"title":"old low","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"},{"name":"priority:p2"}]},
+    {"number":9,"title":"new high","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"},{"name":"priority:p0"}]}
   ]'
   run scripts/dispatch.sh
   [ "$status" -eq 0 ]
@@ -75,8 +75,8 @@ fake_issues() { printf '%s' "$1" > "$PL_FAKE_ISSUES"; }
 
 @test "dispatch: equal priority breaks ties by oldest issue number" {
   fake_issues '[
-    {"number":20,"title":"newer","labels":[{"name":"state:ready"},{"name":"persona:developer"},{"name":"priority:p1"}]},
-    {"number":12,"title":"older","labels":[{"name":"state:ready"},{"name":"persona:developer"},{"name":"priority:p1"}]}
+    {"number":20,"title":"newer","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"},{"name":"priority:p1"}]},
+    {"number":12,"title":"older","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"},{"name":"priority:p1"}]}
   ]'
   run scripts/dispatch.sh
   [ "$status" -eq 0 ]
@@ -86,7 +86,7 @@ fake_issues() { printf '%s' "$1" > "$PL_FAKE_ISSUES"; }
 
 @test "dispatch: writer persona claims the lock before dispatch and releases after" {
   fake_issues '[
-    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"persona:developer"}]}
+    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
   ]'
   run scripts/dispatch.sh
   [ "$status" -eq 0 ]
@@ -106,7 +106,7 @@ fake_issues() { printf '%s' "$1" > "$PL_FAKE_ISSUES"; }
 
 @test "dispatch: writes a run record (trigger=dispatch) for the dispatched issue" {
   fake_issues '[
-    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"persona:developer"}]}
+    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
   ]'
   run scripts/dispatch.sh
   [ "$status" -eq 0 ]
@@ -120,7 +120,7 @@ fake_issues() { printf '%s' "$1" > "$PL_FAKE_ISSUES"; }
 
 @test "dispatch: --dry-run prints the target but invokes nothing" {
   fake_issues '[
-    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"persona:developer"}]}
+    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
   ]'
   run scripts/dispatch.sh --dry-run
   [ "$status" -eq 0 ]
@@ -162,7 +162,7 @@ fake_issues() { printf '%s' "$1" > "$PL_FAKE_ISSUES"; }
 
 @test "dispatch: never calls the real claude binary (uses PL_CLAUDE indirection)" {
   fake_issues '[
-    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"persona:developer"}]}
+    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
   ]'
   # Drop a poisoned `claude` on PATH; if dispatch honors PL_CLAUDE it is never called.
   cat > "$PL_TEST_BIN/claude" <<'SH'
@@ -246,7 +246,7 @@ SH
 
 @test "dispatch: writer + readers in one cycle — readers dispatched AND the one writer with lock" {
   fake_issues '[
-    {"number":80,"title":"writer","labels":[{"name":"state:ready"},{"name":"persona:developer"},{"name":"priority:p1"}]},
+    {"number":80,"title":"writer","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"},{"name":"priority:p1"}]},
     {"number":81,"title":"r1","labels":[{"name":"state:ready"},{"name":"persona:technical-writer"},{"name":"priority:p1"}]},
     {"number":82,"title":"r2","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p1"}]}
   ]'
@@ -266,8 +266,8 @@ SH
 
 @test "dispatch: at most ONE writer per cycle even when two writer issues are ready" {
   fake_issues '[
-    {"number":90,"title":"w1","labels":[{"name":"state:ready"},{"name":"persona:developer"},{"name":"priority:p1"}]},
-    {"number":91,"title":"w2","labels":[{"name":"state:ready"},{"name":"persona:developer"},{"name":"priority:p2"}]}
+    {"number":90,"title":"w1","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"},{"name":"priority:p1"}]},
+    {"number":91,"title":"w2","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"},{"name":"priority:p2"}]}
   ]'
   PL_READONLY_CAP=5 run scripts/dispatch.sh
   [ "$status" -eq 0 ]
@@ -337,6 +337,79 @@ SH
   [ "$elapsed_ms" -ge 500 ]
   # MUTATION PROOF: remove the final `wait` → the parent returns in <500ms (readers
   # orphaned, records race the next cycle); elapsed drops below the floor, this fails.
+}
+
+# ── dev:ready gate for the writer (issue #37, Tom's design) ───────────────────────────
+# `state:ready` = eligible for upstream reader work; `dev:ready` = upstream done, safe to
+# build. The WRITER (developer) partition requires BOTH labels. Readers are unchanged:
+# they still dispatch on `state:ready` alone, regardless of `dev:ready`.
+
+@test "dispatch: writer issue with state:ready but NOT dev:ready is NOT dispatched" {
+  fake_issues '[
+    {"number":201,"title":"dev not ready","labels":[{"name":"state:ready"},{"name":"persona:developer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  # nothing dispatched — the developer slot is gated by the missing dev:ready label
+  if grep -q "CLAUDE" "$PL_CLAUDE_LOG"; then false; fi
+  if grep -q "claim" "$PL_LOCK_LOG"; then false; fi
+  # MUTATION PROOF: drop the `dev:ready` clause from the writer filter → #201 dispatched
+  # + claim appears, this fails.
+}
+
+@test "dispatch: writer issue with BOTH state:ready AND dev:ready IS dispatched (with lock)" {
+  fake_issues '[
+    {"number":202,"title":"dev ready","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF "agents/developer.md" "$PL_CLAUDE_LOG"
+  grep -qF "#202" "$PL_CLAUDE_LOG"
+  grep -q "claim" "$PL_LOCK_LOG"
+  grep -q "release" "$PL_LOCK_LOG"
+  # MUTATION PROOF: require some other label instead of dev:ready in the writer filter →
+  # #202 not dispatched, this fails.
+}
+
+@test "dispatch: reader dispatches on state:ready alone — dev:ready is irrelevant to readers" {
+  # A reader with NO dev:ready still dispatches; the gate is writer-only.
+  fake_issues '[
+    {"number":203,"title":"reader no devready","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF "#203" "$PL_CLAUDE_LOG"
+  grep -qF "agents/product-analyst.md" "$PL_CLAUDE_LOG"
+  if grep -q "claim" "$PL_LOCK_LOG"; then false; fi
+  # MUTATION PROOF: add a dev:ready requirement to the reader filter → #203 not dispatched,
+  # this fails.
+}
+
+@test "dispatch: dev:ready on a reader does not turn it into a writer (no lock, still reader)" {
+  # Carrying dev:ready must not change a reader's classification or make it claim the lock.
+  fake_issues '[
+    {"number":204,"title":"reader with devready","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:technical-writer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF "#204" "$PL_CLAUDE_LOG"
+  if grep -q "claim" "$PL_LOCK_LOG"; then false; fi
+}
+
+@test "dispatch: mixed cycle — gated writer skipped, reader still flows" {
+  # Writer lacks dev:ready (gated out); reader has only state:ready (dispatched). Proves the
+  # gate is surgical: it removes the writer from the pool without starving readers.
+  fake_issues '[
+    {"number":205,"title":"writer gated","labels":[{"name":"state:ready"},{"name":"persona:developer"},{"name":"priority:p0"}]},
+    {"number":206,"title":"reader","labels":[{"name":"state:ready"},{"name":"persona:marketing"},{"name":"priority:p1"}]}
+  ]'
+  PL_READONLY_CAP=3 run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  # writer #205 gated out — no dispatch, no lock
+  if grep -qF "#205" "$PL_CLAUDE_LOG"; then false; fi
+  if grep -q "claim" "$PL_LOCK_LOG"; then false; fi
+  # reader #206 still dispatched
+  grep -qF "#206" "$PL_CLAUDE_LOG"
 }
 
 @test "dispatch: multi-dispatch never calls the real claude binary either" {

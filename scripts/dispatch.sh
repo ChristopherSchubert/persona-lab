@@ -26,6 +26,11 @@
 #   - persona signal: carries exactly one `persona:<slug>` label (this file defines the
 #                     convention; <slug> is an agents/<slug>.md persona)
 #   - not blocked:    no `blocked-by:*`, `needs-human:*`, or `quarantine` label
+#   - dev:ready gate (#37): the WRITER (developer) partition additionally requires a
+#                     `dev:ready` label — `state:ready` alone means upstream review/design/
+#                     acceptance isn't done. Readers/consultants are UNCHANGED (dispatch on
+#                     `state:ready` alone). This is a pre-selection filter only; the
+#                     writer-lock invariant in lock.sh is untouched.
 # Highest = lowest priority number (priority:p0 > p1 > p2 > p3; default p3), ties broken
 # by oldest issue number.
 #
@@ -66,7 +71,9 @@ case "$hard_cap"     in ''|*[!0-9]*) pl_die "dispatch: PL_READONLY_HARD_CAP must
 # Pull open issues with number + labels, then rank in jq:
 #   keep:  has state:ready AND a persona:* label AND no blocking label
 #   sort:  priority asc (p0=0 … p3=3, default 3), then number asc
-#   emit:  every candidate as "<number>\t<persona-slug>", highest-priority first.
+#   emit:  every candidate as "<number>\t<persona-slug>\t<dev_ready>", highest-priority first.
+# `dev_ready` is "1" iff the issue also carries `dev:ready` (Tom's design on #37): the
+# writer (developer) partition requires it; readers ignore it entirely.
 # Partitioning into writer vs reader is done in bash via is_writer_persona() so the single
 # is_writer_persona() boundary stays the one source of truth (no persona list duplicated in jq).
 issues_json="$(gh issue list --state open --json number,labels --limit 200)"
@@ -80,26 +87,33 @@ candidates="$(printf '%s' "$issues_json" | jq -r '
     (labelset | map(select(startswith("persona:"))) | .[0] // "" | ltrimstr("persona:"));
   def blocked:
     (labelset | any(.[]; startswith("blocked-by:") or startswith("needs-human:") or . == "quarantine"));
+  def dev_ready:
+    (labelset | any(.[]; . == "dev:ready"));
   [ .[]
     | select(labelset | any(.[]; . == "state:ready"))
     | select(blocked | not)
     | select(persona != "")
-    | {number, persona: persona, prio: prio}
+    | {number, persona: persona, prio: prio, dev_ready: (if dev_ready then 1 else 0 end)}
   ]
   | sort_by(.prio, .number)
   | .[]
-  | "\(.number)\t\(.persona)"
+  | "\(.number)\t\(.persona)\t\(.dev_ready)"
 ')"
 
 # Partition into writer (at most one) and reader (up to eff_cap) selections, preserving
 # the priority order from jq. The first writer encountered is the single writer dispatch.
+# WRITER GATE (#37): a writer candidate is eligible only if it carries `dev:ready` (dr=1) —
+# `state:ready` alone means upstream work isn't done yet. Readers are NOT gated: dev:ready
+# is irrelevant to them, they dispatch on `state:ready` as before.
 writer_line=""
 reader_lines=()
 if [ -n "$candidates" ]; then
-  while IFS=$'\t' read -r num pers; do
+  while IFS=$'\t' read -r num pers dr; do
     [ -n "$num" ] || continue
     if is_writer_persona "$pers"; then
-      [ -z "$writer_line" ] && writer_line="${num}"$'\t'"${pers}"   # one writer per cycle
+      if [ "$dr" = "1" ] && [ -z "$writer_line" ]; then
+        writer_line="${num}"$'\t'"${pers}"   # one dev:ready writer per cycle
+      fi
     else
       if [ "${#reader_lines[@]}" -lt "$eff_cap" ]; then
         reader_lines+=("${num}"$'\t'"${pers}")
