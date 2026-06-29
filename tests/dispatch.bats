@@ -814,3 +814,66 @@ SH
   grep -qE "issue comment.*11" "$PL_GH_LOG"
   if grep -qE "pr review" "$PL_GH_LOG"; then false; fi
 }
+
+# ── Auto-apply merge-gate labels from a reviewer's verdict (#149/#196 — loop labels itself) ──────
+
+@test "dispatch: lead-engineer approve verdict applies gate:eng-approved to the PR" {
+  fake_issues '[
+    {"number":192,"title":"Greg: review PR #190","labels":[{"name":"state:ready"},{"name":"persona:lead-engineer"},{"name":"priority:p0"}]}
+  ]'
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"REVIEW\\",\\"pr\\":190,\\"verdict\\":\\"approve\\",\\"body\\":\\"LGTM.\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qE "pr edit.*190.*--add-label gate:eng-approved" "$PL_GH_LOG"
+}
+
+@test "dispatch: head-of-qa approve verdict applies gate:qa-approved to the PR" {
+  fake_issues '[
+    {"number":193,"title":"Priya: QA PR #190","labels":[{"name":"state:ready"},{"name":"persona:head-of-qa"},{"name":"priority:p0"}]}
+  ]'
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"REVIEW\\",\\"pr\\":190,\\"verdict\\":\\"approve\\",\\"body\\":\\"QA passed.\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qE "pr edit.*190.*--add-label gate:qa-approved" "$PL_GH_LOG"
+}
+
+@test "dispatch: lead-engineer request-changes applies gate:changes-requested (and removes eng-approved)" {
+  fake_issues '[
+    {"number":192,"title":"Greg: review PR #190","labels":[{"name":"state:ready"},{"name":"persona:lead-engineer"},{"name":"priority:p0"}]}
+  ]'
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"REVIEW\\",\\"pr\\":190,\\"verdict\\":\\"request-changes\\",\\"body\\":\\"Fix B1.\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qE "pr edit.*190.*--add-label gate:changes-requested" "$PL_GH_LOG"
+  grep -qE "pr edit.*190.*--remove-label gate:eng-approved" "$PL_GH_LOG"
+}
+
+@test "dispatch: a non-gating persona's PR review applies NO gate label" {
+  fake_issues '[
+    {"number":194,"title":"Analyst note on PR #190","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"},{"name":"priority:p0"}]}
+  ]'
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"REVIEW\\",\\"pr\\":190,\\"verdict\\":\\"approve\\",\\"body\\":\\"Reads fine.\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  if grep -qE "pr edit.*gate:" "$PL_GH_LOG"; then false; fi
+}
