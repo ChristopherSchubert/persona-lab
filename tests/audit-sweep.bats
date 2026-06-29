@@ -196,3 +196,11 @@ SH
   if grep -qF "issue create" "$PL_GH_LOG"; then false; fi
   # MUTATION PROOF: swallow the raw output on parse failure → "raw output below" absent, this fails.
 }
+
+@test "audit-sweep: shows the persona the open issues so it can avoid re-filing (#126)" {
+  printf '[{"title":"Already tracked thing"}]' > "$PL_FAKE_ISSUES"
+  run scripts/audit-sweep.sh technical-writer
+  [ "$status" -eq 0 ]
+  grep -qF "Already tracked thing" "$PL_CLAUDE_LOG"   # existing open issue surfaced IN the sweep prompt
+  # MUTATION PROOF: drop existing_titles from the prompt → the persona never sees it, this fails.
+}

@@ -196,8 +196,11 @@ dispatch_one() {
   name="$("$here/assign-names.sh" "$persona" 2>/dev/null || echo "$persona")"   # slug -> display name (envelope + avatar)
   role="$(awk -F' — ' '/^# /{t=$1; sub(/^# +/,"",t); print t; exit}' "$agent")" # role title from the agent H1
 
+  # Read the bus FOR the persona (it usually can't): inject the issue's title/body/comments so it
+  # operates on the REAL task instead of just "issue #N" (#125).
+  local issue_ctx; issue_ctx="$(pl_issue_context "$issue_number" "$ghrepo")"
   local prompt
-  prompt="$(printf 'You are operating issue #%s on repo %s. Do ONE bounded unit of work for your role (ADR-0001), using only the tools you have been granted. You do NOT post to the bus — the harness posts your record for you. End your turn by returning ONLY a single JSON object, no prose and no code fence:\n{"record_type":"<ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY>","body":"<your record as GitHub-flavored markdown; if you changed code or opened a PR, cite it>"}\n' "$issue_number" "$repo")"
+  prompt="$(printf '%s\n\n---\n\nYou are operating the issue above (#%s) on repo %s. Do ONE bounded unit of work for your role (ADR-0001), using only the tools you have been granted. Act on the issue body/discussion above. You do NOT post to the bus — the harness posts your record for you. End your turn by returning ONLY a single JSON object, no prose and no code fence:\n{"record_type":"<ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY>","body":"<your record as GitHub-flavored markdown; if you changed code or opened a PR, cite it>"}\n' "$issue_ctx" "$issue_number" "$repo")"
 
   echo "dispatch: -> #${issue_number} '${persona}' (${name} · ${role}) [allowedTools: ${allowed}]" >&2
   local raw result record rtype body url=""

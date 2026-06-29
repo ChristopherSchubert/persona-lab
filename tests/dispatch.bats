@@ -17,6 +17,8 @@ setup() {
 echo "GH $*" >> "$PL_GH_LOG"
 case "$1 $2" in
   "issue list") cat "$PL_FAKE_ISSUES";;
+  "issue view") echo "INJECTED_TASK_CONTEXT for issue $3";;
+  "repo view")  echo "acme/persona-lab";;
 esac
 SH
   chmod +x "$PL_TEST_BIN/gh"
@@ -622,4 +624,22 @@ SH
   echo "$output" | grep -qF "I am not sure"   # the actual model text is surfaced (foreground mutator)
   if grep -qF "issue comment" "$PL_GH_LOG"; then false; fi
   # MUTATION PROOF: swallow the result on parse failure → "raw output" absent, this fails.
+}
+
+# ── Personas read the bus (#125): harness injects the issue into the prompt ─────────────
+
+@test "dispatch: injects the dispatched issue's content into the persona's prompt" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"REPLY\\",\\"body\\":\\"ok\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF "INJECTED_TASK_CONTEXT" "$PL_CLAUDE_LOG"   # the persona received its task, not just "issue #N"
+  # MUTATION PROOF: drop pl_issue_context from the prompt → context absent, this fails.
 }
