@@ -44,6 +44,13 @@ for num in $nums; do
   labels="$(printf '%s' "$prs" | jq -r --arg n "$num" '.[] | select(.number==($n|tonumber)) | .labels[].name')"
   files="$(gh pr view "$num" --repo "$ghrepo" --json files | jq -r '.files[].path' 2>/dev/null || true)"
 
+  # FAIL-SAFE (Greg's review): an empty file list means the QA surface is UNKNOWN — a real PR always
+  # touches at least one file, so empty means `gh pr view` failed/rate-limited. Never merge blind: a
+  # tests/ or scripts/ change could otherwise slip past Priya's required gate. Skip and retry next pass.
+  if [ -z "$files" ]; then
+    echo "integrate: PR #${num} file listing empty/failed — skipping (can't confirm QA surface)" >&2; continue
+  fi
+
   # Blocked: a reviewer asked for changes.
   if has_label "gate:changes-requested" "$labels"; then
     echo "integrate: PR #${num} blocked (gate:changes-requested) — skipping" >&2; continue

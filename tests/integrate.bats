@@ -120,6 +120,41 @@ fake_prs() { printf '%s' "$1" > "$PL_FAKE_PRS"; }
   # MUTATION PROOF: drop the checkpoint runlog call → no checkpoint record, this fails.
 }
 
+@test "integrate: a PR whose file listing fails is NOT merged (fail-safe, can't confirm QA surface)" {
+  # gh pr view fails (transient API error). If files come back empty, the QA surface is unknown —
+  # the pipeline must NOT merge (a scripts/ or tests/ change could slip past Priya's gate).
+  cat > "$PL_TEST_BIN/gh" <<'SH'
+#!/usr/bin/env bash
+echo "GH $*" >> "$PL_GH_LOG"
+case "$1 $2" in
+  "pr list")  jq '[.[] | {number, labels}]' "$PL_FAKE_PRS" ;;
+  "pr view")  exit 1 ;;
+  "repo view") echo "acme/persona-lab" ;;
+esac
+SH
+  chmod +x "$PL_TEST_BIN/gh"
+  fake_prs '[
+    {"number":299,"labels":[{"name":"gate:eng-approved"}],"files":[{"path":"scripts/x.sh"}]}
+  ]'
+  run scripts/integrate.sh
+  [ "$status" -eq 0 ]
+  if grep -qE "pr merge" "$PL_GH_LOG"; then false; fi
+  # MUTATION PROOF: drop the empty-files fail-safe guard → this PR merges, this fails.
+}
+
+@test "integrate: in a mixed batch, only the green PR merges" {
+  fake_prs '[
+    {"number":301,"labels":[{"name":"gate:eng-approved"}],"files":[{"path":"docs/a.md"}]},
+    {"number":302,"labels":[{"name":"gate:eng-approved"},{"name":"gate:changes-requested"}],"files":[{"path":"docs/b.md"}]},
+    {"number":303,"labels":[{"name":"gate:eng-approved"}],"files":[{"path":"scripts/c.sh"}]}
+  ]'
+  run scripts/integrate.sh
+  [ "$status" -eq 0 ]
+  grep -qE "pr merge.*301" "$PL_GH_LOG"          # docs-only, eng-approved → merges
+  if grep -qE "pr merge.*302" "$PL_GH_LOG"; then false; fi   # changes-requested → blocked
+  if grep -qE "pr merge.*303" "$PL_GH_LOG"; then false; fi   # scripts/ without qa → blocked
+}
+
 @test "integrate: nothing mergeable exits 0 quietly" {
   fake_prs '[]'
   run scripts/integrate.sh
