@@ -251,6 +251,7 @@ dispatch_one() {
         case "$verdict" in
           approve|approved)                                   event="approve" ;;
           request-changes|request_changes|changes-requested) event="request-changes" ;;
+          comment) event="comment" ;;
           *) event="comment"
              [ -n "$verdict" ] && echo "dispatch: <- #${issue_number} '${persona}' unrecognized verdict '${verdict}' — posting as a plain PR comment" >&2 ;;
         esac
