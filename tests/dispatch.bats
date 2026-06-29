@@ -877,3 +877,21 @@ SH
   [ "$status" -eq 0 ]
   if grep -qE "pr edit.*gate:" "$PL_GH_LOG"; then false; fi
 }
+
+# ── Producing path stamps the Resolves-Issue trailer so accept.sh can close the issue (#149/#196) ──
+
+@test "dispatch: the persona prompt instructs PRs to carry a Resolves-Issue trailer" {
+  fake_issues '[
+    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"DELIVERED\\",\\"body\\":\\"done\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  # the persona is told to stamp the trailer naming THIS issue, so a merged PR can be PM-accepted
+  grep -qF "Resolves-Issue" "$PL_CLAUDE_LOG"
+}

@@ -27,6 +27,15 @@ mk "dev:ready" "1F6F3C" "Upstream done — eligible for the Developer to build (
 mk "state:in_progress" "FBCA04" "ADR-0001: worked, not yet delivered — off the Act queue pending the next step (#132)"
 mk "state:in_review"   "5319E7" "ADR-0001: DELIVERED — in the Greg/Priya review gates (#132)"
 mk "state:parked"      "C5DEF5" "ADR-0001: parked on a BLOCKER/ASK — owner+deadline in the record (#132)"
+# Merge-gate + integrate/accept states (#149): the dispatch REVIEW path applies the gate:* labels from
+# a reviewer's verdict; integrate.sh merges a PR only when its required gates are present and labels it
+# state:merged; accept.sh moves it state:merged → state:accepted on the PM acceptance close. Provisioned
+# here so a fresh repo has them (they were previously created ad hoc, which broke accept.sh's relabel).
+mk "gate:eng-approved"      "2DA44E" "Lead Engineer approved — merge gate (integrate.sh, #149)"
+mk "gate:qa-approved"       "2DA44E" "QA signed off — merge gate (required when tests/ or scripts/ change)"
+mk "gate:changes-requested" "D73A4A" "Reviewer requested changes — blocks merge (#149)"
+mk "state:merged"           "6F42C1" "Merged by integrate.sh; awaiting PM acceptance close (#149)"
+mk "state:accepted"         "0E8A16" "PM-accepted and closed — terminal (accept.sh, #149)"
 mk "priority:p0" "B60205" "Priority P0 — dispatched before lower priorities"
 mk "priority:p1" "D93F0B" "Priority P1"
 mk "priority:p2" "FBCA04" "Priority P2"
