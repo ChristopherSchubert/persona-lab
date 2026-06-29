@@ -200,12 +200,12 @@ apply_gate_label() {
   glabel="$(gate_label_for "$persona")"; [ -n "$glabel" ] || return 0
   case "$event" in
     approve)
-      gh pr edit "$pr" --repo "$ghrepo" --add-label "$glabel"               >/dev/null 2>&1 || true
-      gh pr edit "$pr" --repo "$ghrepo" --remove-label "gate:changes-requested" >/dev/null 2>&1 || true
+      gh pr edit "$pr" --repo "$ghrepo" --add-label "$glabel"               </dev/null >/dev/null 2>&1 || true
+      gh pr edit "$pr" --repo "$ghrepo" --remove-label "gate:changes-requested" </dev/null >/dev/null 2>&1 || true
       echo "dispatch: <- gate ${glabel} applied to PR #${pr}" >&2 ;;
     request-changes)
-      gh pr edit "$pr" --repo "$ghrepo" --add-label "gate:changes-requested" >/dev/null 2>&1 || true
-      gh pr edit "$pr" --repo "$ghrepo" --remove-label "$glabel"             >/dev/null 2>&1 || true
+      gh pr edit "$pr" --repo "$ghrepo" --add-label "gate:changes-requested" </dev/null >/dev/null 2>&1 || true
+      gh pr edit "$pr" --repo "$ghrepo" --remove-label "$glabel"             </dev/null >/dev/null 2>&1 || true
       echo "dispatch: <- gate:changes-requested applied to PR #${pr} (cleared ${glabel})" >&2 ;;
   esac
 }
