@@ -628,6 +628,98 @@ SH
 
 # ── Personas read the bus (#125): harness injects the issue into the prompt ─────────────
 
+# ── State advance after a posted record (#132 treadmill fix) ──────────────────────────
+# THE bug: after a persona's record is posted, the issue kept `state:ready` and was
+# re-selected every cycle (a treadmill). The harness — the only actor with a shell — must
+# drive the ADR-0001 state machine forward: remove `state:ready` so the same issue can't be
+# re-picked, and set the next state from the record type. Personas have no Bash, so they
+# cannot do this themselves.
+
+@test "dispatch: a DELIVERED record advances the issue to in_review and off state:ready" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"DELIVERED\\",\\"body\\":\\"done; PR #9, CI green\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":11,"title":"dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF "issue edit" "$PL_GH_LOG"
+  grep -qF "state:in_review" "$PL_GH_LOG"
+  grep -qF -- "--remove-label state:ready" "$PL_GH_LOG"
+  # MUTATION PROOF: drop the advance_state call → no "issue edit"/"state:in_review", this fails.
+}
+
+@test "dispatch: a BLOCKER record parks the issue (off state:ready)" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"BLOCKER\\",\\"body\\":\\"blocked: needs a decision\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":13,"title":"analysis","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF "state:parked" "$PL_GH_LOG"
+  grep -qF -- "--remove-label state:ready" "$PL_GH_LOG"
+  # MUTATION PROOF: map BLOCKER to the default state → "state:parked" absent, this fails.
+}
+
+@test "dispatch: an ASK record parks the issue awaiting input (off state:ready)" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"ASK\\",\\"body\\":\\"need clarification from PM\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":13,"title":"analysis","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF "state:parked" "$PL_GH_LOG"
+  grep -qF -- "--remove-label state:ready" "$PL_GH_LOG"
+}
+
+@test "dispatch: an ASSESSMENT record moves the issue to in_progress (off state:ready)" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"ASSESSMENT\\",\\"body\\":\\"observed: X\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":13,"title":"analysis","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF "state:in_progress" "$PL_GH_LOG"
+  grep -qF -- "--remove-label state:ready" "$PL_GH_LOG"
+  # MUTATION PROOF: leave state:ready in place (no advance) → treadmill; this fails.
+}
+
+@test "dispatch: a non-parseable response does NOT advance state (issue stays selectable)" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"I could not produce a record."}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":13,"title":"analysis","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  # nothing posted ⇒ nothing advanced; the issue must stay state:ready for a real next attempt
+  if grep -qF "issue edit" "$PL_GH_LOG"; then false; fi
+  # MUTATION PROOF: advance unconditionally (not gated on a successful post) → "issue edit" appears, this fails.
+}
+
 @test "dispatch: injects the dispatched issue's content into the persona's prompt" {
   cat > "$PL_TEST_BIN/fake-claude" <<'SH'
 #!/usr/bin/env bash
