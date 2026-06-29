@@ -221,9 +221,9 @@ advance_state() {
   # ready (re-selectable) rather than floating with no state, and we log loudly. dev:ready is
   # cleaned up best-effort afterwards: it's inert once state:ready is gone (selection needs
   # state:ready), so a stray dev:ready can't resurrect the treadmill.
-  if gh issue edit "$n" --repo "$ghrepo" --add-label "$next" --remove-label "state:ready" >/dev/null 2>&1; then
+  if gh issue edit "$n" --repo "$ghrepo" --add-label "$next" --remove-label "state:ready" </dev/null >/dev/null 2>&1; then
     echo "dispatch: state #${n} -> ${next} (left state:ready) [${rt}]" >&2
-    gh issue edit "$n" --repo "$ghrepo" --remove-label "dev:ready" >/dev/null 2>&1 || true
+    gh issue edit "$n" --repo "$ghrepo" --remove-label "dev:ready" </dev/null >/dev/null 2>&1 || true
   else
     echo "dispatch: WARNING #${n} state advance FAILED — stays state:ready, will re-select [${rt}]" >&2
   fi
