@@ -205,14 +205,10 @@ advance_state() {
   fi
 }
 
-# Best-effort extract one JSON object from a persona's result text (raw, or ```-fenced).
-_extract_json() {
-  local in; in="$(cat)"
-  printf '%s' "$in" | jq -ce . 2>/dev/null && return 0                          # already clean JSON
-  printf '%s' "$in" | awk '/^```/{f=!f; next} {print}' | jq -ce . 2>/dev/null && return 0  # strip ``` fences
-  printf '%s' "$in" | perl -0777 -ne 'print $& if /(\[.*\]|\{.*\})/s' 2>/dev/null | jq -ce . 2>/dev/null && return 0  # first [...]/{...} block (prose-wrapped)
-  return 1
-}
+# Extract one JSON object from a persona's result text. Delegates to the shared, strengthened
+# pl_extract_json in lib/common.sh (prefers the FINAL ```-fenced block, then LAST top-level value)
+# so a JSON example in the prose can never be grabbed ahead of the real record (#153).
+_extract_json() { pl_extract_json; }
 
 # Dispatch one unit of work and POST THE PERSONA'S RECORD on its behalf.
 # Why the harness posts (issue #9 access-model fix): most personas are read-only (Read,Grep,Glob)
@@ -234,7 +230,7 @@ dispatch_one() {
   # operates on the REAL task instead of just "issue #N" (#125).
   local issue_ctx; issue_ctx="$(pl_issue_context "$issue_number" "$ghrepo")"
   local prompt
-  prompt="$(printf '%s\n\n---\n\nYou are operating the issue above (#%s) on repo %s. Do ONE bounded unit of work for your role (ADR-0001), using only the tools you have been granted. Act on the issue body/discussion above. You do NOT post to the bus — the harness posts your record for you. End your turn by returning ONLY a single JSON object, no prose and no code fence:\n{"record_type":"<ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY>","body":"<your record as GitHub-flavored markdown; if you changed code or opened a PR, cite it>"}\n' "$issue_ctx" "$issue_number" "$repo")"
+  prompt="$(printf '%s\n\n---\n\nYou are operating the issue above (#%s) on repo %s. Do ONE bounded unit of work for your role (ADR-0001), using only the tools you have been granted. Act on the issue body/discussion above. You do NOT post to the bus — the harness posts your record for you. End your turn by emitting your record as the FINAL ```json fenced code block in your message, with NOTHING after the closing fence. The block must contain exactly one JSON object (if your prose quotes any other JSON, the harness still takes only this last fenced block):\n```json\n{"record_type":"<ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY>","body":"<your record as GitHub-flavored markdown; if you changed code or opened a PR, cite it>"}\n```\n' "$issue_ctx" "$issue_number" "$repo")"
 
   echo "dispatch: -> #${issue_number} '${persona}' (${name} · ${role}) [allowedTools: ${allowed}]" >&2
   local raw result record rtype body url=""
