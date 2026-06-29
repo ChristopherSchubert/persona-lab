@@ -63,11 +63,30 @@ fake_triage() { printf '%s' "$1" > "$PL_FAKE_TRIAGE"; }   # the JSON array Sarah
   # Both PRs are already past review; the PM should be given an empty pending set → no claude call.
   fake_prs '[
     {"number":1,"title":"done","labels":[{"name":"gate:eng-approved"}],"files":[{"path":"a.md"}]},
-    {"number":2,"title":"merged","labels":[{"name":"state:merged"}],"files":[{"path":"b.md"}]}
+    {"number":2,"title":"merged","labels":[{"name":"state:merged"}],"files":[{"path":"b.md"}]},
+    {"number":3,"title":"accepted","labels":[{"name":"state:accepted"}],"files":[{"path":"c.md"}]}
   ]'
   run scripts/triage-reviews.sh
   [ "$status" -eq 0 ]
   if grep -qE "^CLAUDE|issue create" "$PL_GH_LOG"; then false; fi
+}
+
+@test "triage-reviews: routes a visual PR to head-of-design when the PM says so" {
+  fake_prs '[{"number":210,"title":"new banner","labels":[],"files":[{"path":"assets/banner.svg"}]}]'
+  fake_triage '```json
+[{"pr":210,"reviewer":"head-of-design","priority":"p2","title":"Review PR #210 — Head of Design","body":"Design sign-off on the banner."}]
+```'
+  run scripts/triage-reviews.sh
+  [ "$status" -eq 0 ]
+  grep -qE "(add-label|--label).*persona:head-of-design" "$PL_GH_LOG"
+}
+
+@test "triage-reviews: a junk PM response files nothing and exits 0 (fail-safe)" {
+  fake_prs '[{"number":190,"title":"isolation","labels":[],"files":[{"path":"scripts/x.sh"}]}]'
+  fake_triage 'I cannot help with that.'
+  run scripts/triage-reviews.sh
+  [ "$status" -eq 0 ]
+  if grep -qE "issue create" "$PL_GH_LOG"; then false; fi
 }
 
 @test "triage-reviews: dedup — an already-open review task for the PR is not re-filed" {
