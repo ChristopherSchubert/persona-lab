@@ -206,7 +206,7 @@ apply_gate_label() {
     request-changes)
       gh pr edit "$pr" --repo "$ghrepo" --add-label "gate:changes-requested" >/dev/null 2>&1 || true
       gh pr edit "$pr" --repo "$ghrepo" --remove-label "$glabel"             >/dev/null 2>&1 || true
-      echo "${PL_C_OK}dispatch: <- gate:changes-requested applied to PR #${pr} (cleared ${glabel})${PL_C_RST}" >&2 ;;
+      echo "${PL_C_WARN}dispatch: <- gate:changes-requested applied to PR #${pr} (cleared ${glabel})${PL_C_RST}" >&2 ;;
   esac
 }
 
