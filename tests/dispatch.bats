@@ -757,7 +757,11 @@ SH
   grep -qE "pr review.*190.*--approve" "$PL_GH_LOG"
   # And NOT buried as an issue comment on the review issue.
   if grep -qE "issue comment.*192" "$PL_GH_LOG"; then false; fi
-  # MUTATION PROOF: route REVIEW-with-pr back through queue.sh comment → "pr review" absent, this fails.
+  # The review TASK must advance off state:ready so it doesn't re-dispatch every cycle (#132 treadmill).
+  grep -qF "state:in_review" "$PL_GH_LOG"
+  grep -qF -- "--remove-label state:ready" "$PL_GH_LOG"
+  # MUTATION PROOF: route REVIEW-with-pr back through queue.sh comment → "pr review" absent, this fails;
+  # drop advance_state from the PR-review success path → "state:in_review" absent, this fails.
 }
 
 @test "dispatch: REVIEW record naming a pr maps request-changes verdict to gh pr review --request-changes" {
@@ -774,6 +778,23 @@ SH
   run scripts/dispatch.sh
   [ "$status" -eq 0 ]
   grep -qE "pr review.*190.*--request-changes" "$PL_GH_LOG"
+  if grep -qE "issue comment.*192" "$PL_GH_LOG"; then false; fi
+}
+
+@test "dispatch: a REVIEW verdict of 'comment' maps to a plain gh pr review --comment" {
+  fake_issues '[
+    {"number":192,"title":"Greg: note on PR #190","labels":[{"name":"state:ready"},{"name":"persona:lead-engineer"},{"name":"priority:p0"}]}
+  ]'
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"REVIEW\\",\\"pr\\":190,\\"verdict\\":\\"comment\\",\\"body\\":\\"One note, non-blocking.\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qE "pr review.*190.*--comment" "$PL_GH_LOG"
   if grep -qE "issue comment.*192" "$PL_GH_LOG"; then false; fi
 }
 

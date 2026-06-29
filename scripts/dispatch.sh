@@ -189,9 +189,9 @@ esac; }
 advance_state() {
   local n="$1" rt="$2" next
   case "$rt" in
-    DELIVERED)   next="state:in_review";;
-    BLOCKER|ASK) next="state:parked";;
-    *)           next="state:in_progress";;
+    DELIVERED|REVIEW) next="state:in_review";;
+    BLOCKER|ASK)      next="state:parked";;
+    *)                next="state:in_progress";;
   esac
   # One atomic edit sets the next state AND drops state:ready — if this fails the issue stays
   # ready (re-selectable) rather than floating with no state, and we log loudly. dev:ready is
@@ -251,11 +251,13 @@ dispatch_one() {
         case "$verdict" in
           approve|approved)                                   event="approve" ;;
           request-changes|request_changes|changes-requested) event="request-changes" ;;
-          *)                                                  event="comment" ;;
+          *) event="comment"
+             [ -n "$verdict" ] && echo "dispatch: <- #${issue_number} '${persona}' unrecognized verdict '${verdict}' — posting as a plain PR comment" >&2 ;;
         esac
         if url="$("$here/review.sh" "$pr" --persona "$name" --tier "$role" --type "$rtype" --body "$body" --event "$event" --repo "$ghrepo" 2>&1)"; then
           outcome="dispatched"
           echo "dispatch: <- #${issue_number} '${persona}' posted ${rtype} on PR #${pr} (${event}) -> ${url}" >&2
+          advance_state "$issue_number" "$rtype"   # #132: the REVIEW path must leave state:ready too
         else
           echo "dispatch: <- #${issue_number} '${persona}' PR-REVIEW POST FAILED (PR #${pr}):" >&2
           printf '%s\n' "$url" | sed 's/^/        /' >&2
