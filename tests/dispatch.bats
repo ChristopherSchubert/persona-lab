@@ -893,5 +893,5 @@ SH
   run scripts/dispatch.sh
   [ "$status" -eq 0 ]
   # the persona is told to stamp the trailer naming THIS issue, so a merged PR can be PM-accepted
-  grep -qF "Resolves-Issue" "$PL_CLAUDE_LOG"
+  grep -qF "Resolves-Issue: #11" "$PL_CLAUDE_LOG"
 }
