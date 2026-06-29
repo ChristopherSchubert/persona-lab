@@ -67,3 +67,25 @@ setup_locks() {
   [ "$status" -eq 0 ]
   if echo "$output" | grep -q "RECLAIMED"; then false; fi
 }
+
+# Race: a live writer re-claims the lock in the window between the watchdog
+# assessing it stale and the guarded delete. The fence guard must skip the delete
+# (never nuke a live writer's lock) and surface it — no recreate, no blind release.
+@test "reclaim-locks: a live re-claim mid-recovery is skipped, live lock left intact" {
+  setup_locks
+  # mint a STALE orphan (interrupted dispatch left it 90 min ago)
+  PL_GH_FAKE_DATE="$(date -u -v-90M +%FT%TZ 2>/dev/null || date -u -d '90 minutes ago' +%FT%TZ)" \
+    scripts/lock.sh claim --repo finances --holder Doug >/dev/null
+  # the instant the watchdog reads the ref (its inspect), a live writer re-claims it:
+  # the stub swaps the ref to a fresh fence on that first single-ref GET.
+  export PL_GH_SWAP_REF="refs/heads/persona-lock/finances"
+  export PL_GH_SWAP_SHA="ffffffffffffffffffffffffffffffffffffffff"
+  run scripts/watchdog.sh reclaim-locks --grace-min 30
+  unset PL_GH_SWAP_REF PL_GH_SWAP_SHA
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "SKIPPED"
+  # the fence guard prevented the delete — the live writer's lock is intact (mutation-proof)
+  [ "$(scripts/lock.sh status --repo finances)" = "held" ]
+  # a benign live re-claim is not an incident: nothing was reclaimed
+  if echo "$output" | grep -q "RECLAIMED"; then false; fi
+}

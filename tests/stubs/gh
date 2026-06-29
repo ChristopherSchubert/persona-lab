@@ -69,7 +69,16 @@ case "$url" in
   *git/refs/*|*git/heads/*)  # read or delete a specific ref
     r="${url##*/git/}"; f="$state/refs/$(enc "$r")"
     if [ "$method" = "DELETE" ]; then rm -f "$f"; exit 0; fi
-    [ -e "$f" ] && { cat "$f"; echo; exit 0; }
+    if [ -e "$f" ]; then
+      cat "$f"; echo
+      # One-shot race hook: simulate a live writer re-claiming the ref the instant the
+      # watchdog first reads it (its inspect). The next read sees the swapped-in fence,
+      # so the guarded delete must detect the mismatch and skip. Fires once per state dir.
+      if [ -n "${PL_GH_SWAP_REF:-}" ] && [ "$r" = "$PL_GH_SWAP_REF" ] && [ ! -e "$state/.swapped" ]; then
+        printf '%s' "${PL_GH_SWAP_SHA:?}" > "$f"; : > "$state/.swapped"
+      fi
+      exit 0
+    fi
     echo "404 Not Found" >&2; exit 1;;
 esac
 echo "stub: unhandled url $url" >&2; exit 2

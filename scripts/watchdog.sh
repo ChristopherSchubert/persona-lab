@@ -12,10 +12,13 @@
 # reclaim-locks: an interrupted Developer (hard kill before the EXIT trap fires)
 #   leaves an orphaned persona-lock/<repo> ref that blocks every further write.
 #   For each lock older than the grace window the watchdog runs the safe recovery:
-#     assess (inspect)  → checkpoint (archive the lock commit, no force)
-#       → file an incident issue  → reclaim (delete + recreate) → release (unblock).
+#     assess (inspect)  → checkpoint (archive the assessed lock commit, no force)
+#       → fence-guarded delete (remove the ref only if it still points at the assessed
+#         fence) → file an incident issue. A fence mismatch means a live writer re-claimed
+#         in the race window: the delete is SKIPPED and surfaced, never swallowed, so the
+#         watchdog can never delete a live writer's lock. No recreate, no blind release.
 #   Staleness is decided here (policy); the ref ops live in lock.sh (mechanism).
-#   No --force / PATCH anywhere — every ref op is a create-only CAS or a delete.
+#   No --force / PATCH anywhere — every ref op is a create-only CAS or a guarded delete.
 #
 # Date comparison: ISO-8601 ts strings sort lexically (YYYY-MM-DDTHH:MM:SSZ), so we
 # compute a threshold string and compare with string inequality. Portable "now minus
@@ -81,25 +84,30 @@ while IFS=$'\t' read -r lrepo lfence; do
   info="$("$LOCK_SH" inspect --repo "$lrepo" 2>/dev/null || echo '{}')"
   claimed_at="$(printf '%s' "$info" | jq -r '.claimed_at // ""')"
   holder="$(printf '%s' "$info" | jq -r '.holder // "?"')"
-  [ -n "$claimed_at" ] || continue
+  fence="$(printf '%s' "$info" | jq -r '.fence // ""')"
+  [ -n "$claimed_at" ] && [ -n "$fence" ] || continue
   # not stale: a live dispatch still holds it within the grace window — leave it alone.
   [[ "$claimed_at" < "$threshold" ]] || continue
 
   any=1
-  # 1) checkpoint — preserve the orphaned lock commit before touching the ref.
-  archive="$("$LOCK_SH" checkpoint --repo "$lrepo")"
-  # 2) file an incident issue so a human/PM sees the interrupted dispatch.
-  body="$(printf 'An interrupted Developer left an orphaned writer lock; the watchdog reclaimed it.\n\n- repo: `%s`\n- previous holder: `%s`\n- claimed_at: `%s` (older than the %s-min grace window)\n- orphaned fence: `%s`\n- preserved at: `%s`\n\nRecovery: assess → checkpoint → file issue → reclaim (delete + recreate, no force) → release. The writer lock is now free; investigate whether the interrupted issue needs re-dispatch.' \
-    "$lrepo" "$holder" "$claimed_at" "$grace_min" "$lfence" "$archive")"
-  issue_url="$(gh issue create ${gh_repo:+--repo "$gh_repo"} \
-    --title "incident: stale writer-lock reclaimed — $lrepo (was $holder)" \
-    --body "$body" 2>/dev/null || echo "(issue create failed)")"
-  # 3) reclaim (delete + recreate) then release so every further write is unblocked.
-  "$LOCK_SH" reclaim --repo "$lrepo" --holder "watchdog-recovery" >/dev/null 2>&1 || true
-  "$LOCK_SH" release --repo "$lrepo" >/dev/null 2>&1 || true
-
-  printf 'RECLAIMED repo=%s holder=%s claimed_at=%s archive=%s issue=%s\n' \
-    "$lrepo" "$holder" "$claimed_at" "$archive" "$issue_url"
+  # 1) checkpoint — preserve the *assessed* orphan commit before any destructive op.
+  archive="$("$LOCK_SH" checkpoint --repo "$lrepo" --fence "$fence")"
+  # 2) fence-guarded delete — remove the ref ONLY if it still points at the assessed
+  #    fence. A mismatch means a live writer re-claimed in the race window: skip the
+  #    delete, surface it, and never file a false incident (nothing was reclaimed).
+  if reclaim_out="$("$LOCK_SH" reclaim --repo "$lrepo" --fence "$fence" 2>&1)"; then
+    # 3) genuine orphan reclaimed → file an incident issue citing the recovery.
+    body="$(printf 'An interrupted Developer left an orphaned writer lock; the watchdog reclaimed it.\n\n- repo: `%s`\n- previous holder: `%s`\n- claimed_at: `%s` (older than the %s-min grace window)\n- orphaned fence: `%s`\n- preserved at: `%s`\n\nRecovery: assess → checkpoint → fence-guarded delete (no recreate, no force). The writer lock is now free; investigate whether the interrupted issue needs re-dispatch.' \
+      "$lrepo" "$holder" "$claimed_at" "$grace_min" "$fence" "$archive")"
+    issue_url="$(gh issue create ${gh_repo:+--repo "$gh_repo"} \
+      --title "incident: stale writer-lock reclaimed — $lrepo (was $holder)" \
+      --body "$body" 2>/dev/null || echo "(issue create failed)")"
+    printf 'RECLAIMED repo=%s holder=%s claimed_at=%s archive=%s issue=%s\n' \
+      "$lrepo" "$holder" "$claimed_at" "$archive" "$issue_url"
+  else
+    # live writer re-claimed between assess and delete — surfaced, lock left untouched.
+    printf 'SKIPPED repo=%s holder=%s reason=%s\n' "$lrepo" "$holder" "$reclaim_out"
+  fi
 done <<< "$locks"
 
 [ "$any" -eq 1 ] || printf 'watchdog: no stale locks found (grace=%s min)\n' "$grace_min"

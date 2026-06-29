@@ -8,8 +8,12 @@
 # Recovery primitives (issue #8 — an interrupted Developer leaves an orphaned lock):
 #   inspect    — {holder, claimed_at, fence} of the current lock (committer.date is claimed_at), or {}
 #   list       — every live persona-lock/<repo> ref as "<repo>\t<fence>" (excludes the archive ns)
-#   checkpoint — preserve the current lock commit under persona-lock-archive/<repo>/<fence> (create-only)
-#   reclaim    — delete the stale ref then recreate a fresh one (create-only CAS, no force)
+#   checkpoint — preserve a lock commit under persona-lock-archive/<repo>/<fence> (create-only);
+#                pass --fence to pin the assessed commit, else the current ref tip.
+#   reclaim    — fence-GUARDED delete: remove persona-lock/<repo> ONLY if its current SHA still
+#                equals --fence. On mismatch a live writer re-claimed in the race window → the
+#                delete is skipped and the mismatch is surfaced (non-zero), never swallowed.
+#                The single guarded delete IS the unblock — no recreate, no blind release.
 # The watchdog orchestrates assess→checkpoint→file-issue→reclaim; staleness policy lives there.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.sh"
@@ -97,24 +101,26 @@ case "$cmd" in
     ;;
 
   checkpoint)
-    cur="$(_ref_sha "$ref")"
-    if [ -z "$cur" ]; then echo "free"; exit 0; fi
-    archive="refs/heads/persona-lock-archive/${repo}/${cur}"
-    _create_ref "$archive" "$cur" || true   # idempotent: fine if already archived
+    # Pin the assessed commit when --fence is given, else the current ref tip, so the
+    # archive preserves exactly the orphan the watchdog judged stale (not a racing re-claim).
+    target="$fence"; [ -n "$target" ] || target="$(_ref_sha "$ref")"
+    if [ -z "$target" ]; then echo "free"; exit 0; fi
+    archive="refs/heads/persona-lock-archive/${repo}/${target}"
+    _create_ref "$archive" "$target" || true   # idempotent: fine if already archived
     echo "$archive"
     ;;
 
   reclaim)
+    [ -n "$fence" ] || pl_die "reclaim needs --fence (the assessed lock SHA to guard on)"
     cur="$(_ref_sha "$ref")"
-    if [ -z "$cur" ]; then echo "free"; exit 0; fi
-    [ -n "$holder" ] || holder="watchdog-recovery"
-    gh api -X DELETE "repos/{owner}/{repo}/git/${ref}" >/dev/null 2>&1 || true
-    commit="$(_make_lock_commit "$holder")"
-    if _create_ref "$ref" "$commit"; then
-      echo "$commit"
-    else
-      pl_die "reclaim: re-create contended for $repo (a live writer re-claimed — already unblocked)"
+    if [ -z "$cur" ]; then echo "free"; exit 0; fi   # already gone — nothing to reclaim
+    # Fence guard: only delete if the ref still points at the commit we assessed as stale.
+    # A mismatch means a live writer re-claimed in the window — surface it, leave the lock be.
+    if [ "$cur" != "$fence" ]; then
+      pl_die "reclaim: fence mismatch for $repo (live writer re-claimed — lock left intact, not deleted)"
     fi
+    gh api -X DELETE "repos/{owner}/{repo}/git/${ref}" >/dev/null 2>&1 || true
+    echo "reclaimed $repo"
     ;;
 
   *)

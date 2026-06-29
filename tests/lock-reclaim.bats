@@ -44,18 +44,27 @@ teardown() { rm -rf "$PL_GH_STATE"; }
   [ "$(scripts/lock.sh status --repo finances)" = "held" ]
 }
 
-@test "reclaim: delete + recreate yields a NEW fence and never forces" {
-  old="$(scripts/lock.sh claim --repo finances --holder Doug)"
-  run scripts/lock.sh reclaim --repo finances
+@test "reclaim: fence match deletes the orphaned ref (now free) and never forces" {
+  fence="$(scripts/lock.sh claim --repo finances --holder Doug)"
+  run scripts/lock.sh reclaim --repo finances --fence "$fence"
   [ "$status" -eq 0 ]                 # would be 3 if the stub saw a force/PATCH
-  new="$output"
-  [ -n "$new" ]
-  [ "$new" != "$old" ]
+  echo "$output" | grep -qi "reclaimed"
+  # the single guarded delete IS the unblock — no recreate, lock is now FREE
+  [ "$(scripts/lock.sh status --repo finances)" = "free" ]
+}
+
+@test "reclaim: fence mismatch (live writer re-claimed) skips the delete and surfaces" {
+  # A live writer holds the lock at a fresh fence; the watchdog assessed a STALE one.
+  scripts/lock.sh claim --repo finances --holder LiveWriter >/dev/null
+  run scripts/lock.sh reclaim --repo finances --fence 0000000000000000000000000000000000000000
+  [ "$status" -ne 0 ]                          # surfaced, NOT swallowed by `|| true`
+  echo "$output" | grep -qi "mismatch"
+  # mutation-proof: a live writer's lock must remain intact, never deleted under the race
   [ "$(scripts/lock.sh status --repo finances)" = "held" ]
 }
 
 @test "reclaim: a free lock is a no-op" {
-  run scripts/lock.sh reclaim --repo finances
+  run scripts/lock.sh reclaim --repo finances --fence 0000000000000000000000000000000000000000
   [ "$status" -eq 0 ]
   [ "$output" = "free" ]
 }
