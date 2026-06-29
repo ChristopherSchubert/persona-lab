@@ -50,3 +50,14 @@ SH
   [ "$status" -ne 0 ]
   echo "$output" | grep -qiE "drain|#109|isolation"
 }
+
+@test "cycle: --repo exports PL_REPO so every stage sees it" {
+  cat > "$PL_DISPATCH_SH" <<'SH'
+#!/usr/bin/env bash
+echo "dispatch PL_REPO=$PL_REPO" >> "$PL_ORDER_LOG"
+SH
+  chmod +x "$PL_DISPATCH_SH"
+  run scripts/cycle.sh --repo acme/test-repo
+  [ "$status" -eq 0 ]
+  grep -qF "PL_REPO=acme/test-repo" "$PL_ORDER_LOG"
+}
