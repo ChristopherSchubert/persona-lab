@@ -117,8 +117,9 @@ sweep_one() {
   name="$("$here/assign-names.sh" "$persona" 2>/dev/null || echo "$persona")"
   role="$(awk -F' — ' '/^# /{t=$1; sub(/^# +/,"",t); print t; exit}' "$agent")"
 
+  # Show the persona what is ALREADY open so it doesn't re-file (it can't read the bus itself; #125/#126).
   local prompt
-  prompt="$(printf 'You are sweeping repo %s for work in YOUR domain that is NOT yet tracked as an open issue. Audit the committed state (code, docs, tests, config) with your granted tools. You CANNOT file issues — return findings and the harness files the new ones (duplicate titles are skipped). Return ONLY a JSON array (empty [] if nothing), each item exactly:\n{"title":"<concise issue title>","body":"<the finding as GitHub-flavored markdown: what, where as path:line, why it matters>","record_type":"<ASSESSMENT|BLOCKER>","priority":"<p0|p1|p2|p3>"}\n' "$repo")"
+  prompt="$(printf 'You are sweeping repo %s for work in YOUR domain that is NOT yet tracked as an open issue.\n\nThese issues are ALREADY OPEN — do NOT re-file anything already covered by one of them (match on meaning, not exact wording):\n%s\n\nAudit the committed state (code, docs, tests, config) with your granted tools. You CANNOT file issues — return findings and the harness files the new ones. Return ONLY a JSON array (empty [] if nothing), each item exactly:\n{"title":"<concise issue title>","body":"<the finding as GitHub-flavored markdown: what, where as path:line, why it matters>","record_type":"<ASSESSMENT|BLOCKER>","priority":"<p0|p1|p2|p3>"}\n' "$repo" "${existing_titles:-(none)}")"
 
   echo "${C_HEAD}audit-sweep: -> '${persona}' (${name} · ${role}) sweeping ${repo}...${C_RST}" >&2
   local result arr n filed=0 dup=0 i title body rtype prio url num

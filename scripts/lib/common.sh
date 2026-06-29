@@ -32,6 +32,19 @@ pl_gh_repo() {
   [ -n "$nwo" ] && printf '%s' "$nwo" || printf '%s' "$r"
 }
 
+# Fetch an issue's full context (title, labels, body, comments) as a markdown block, so the harness
+# can hand a dispatched persona the task it cannot read itself (most personas have no gh/Bash; #125).
+# Args: <issue-number> <owner/repo>. Prints empty on any failure (caller degrades gracefully).
+pl_issue_context() {
+  local num="$1" repo="$2"
+  gh issue view "$num" --repo "$repo" --json number,title,body,labels,comments --jq '
+    "## Your task — issue #\(.number): \(.title)\n\n**Labels:** " + ([.labels[].name] | join(", ")) +
+    "\n\n" + (.body // "(no body)") +
+    "\n\n## Records/comments on this issue so far:\n\n" +
+    ( [.comments[].body] | if length == 0 then "(none yet)" else join("\n\n———\n\n") end )
+  ' 2>/dev/null || true
+}
+
 # Resolve the directory where run records are written/read.
 # Precedence: PL_RUNS_DIR (test-isolation override) > PL_RUNS (legacy override) > config default.
 # Tests set PL_RUNS_DIR to a temp dir so they never pollute the real runs dir.
