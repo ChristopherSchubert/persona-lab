@@ -33,16 +33,16 @@ ACCEPT_SH="${PL_ACCEPT_SH:-$here/accept.sh}"
 # Run one stage best-effort: log it, never let its failure abort the whole pass.
 stage() {
   local label="$1" sh="$2"; shift 2
-  echo "cycle: ── ${label} ───────────────────────────────" >&2
+  echo "${PL_C_HEAD}cycle: ── ${label} ───────────────────────────────${PL_C_RST}" >&2
   if ! "$sh" "$@"; then
-    echo "cycle: ${label} exited non-zero — continuing the pass (next stage)" >&2
+    echo "${PL_C_WARN}cycle: ${label} exited non-zero — continuing the pass (next stage)${PL_C_RST}" >&2
   fi
 }
 
-echo "cycle: one full SDLC pass (triage-reviews → dispatch → integrate → accept)" >&2
+echo "${PL_C_HEAD}cycle: one full SDLC pass (triage-reviews → dispatch → integrate → accept)${PL_C_RST}" >&2
 stage "triage-reviews" "$TRIAGE_SH"    ${passthru[@]+"${passthru[@]}"}
 stage "dispatch"       "$DISPATCH_SH"  ${passthru[@]+"${passthru[@]}"}
 stage "integrate"      "$INTEGRATE_SH" ${passthru[@]+"${passthru[@]}"}
 stage "accept"         "$ACCEPT_SH"    ${passthru[@]+"${passthru[@]}"}
-echo "cycle: pass complete" >&2
+echo "${PL_C_OK}cycle: pass complete${PL_C_RST}" >&2
 exit 0

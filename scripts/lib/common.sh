@@ -2,6 +2,17 @@
 # Shared helpers. Source this; do not execute.
 set -euo pipefail
 
+# Colored-log palette for the reactors' stderr chatter (one shared definition, sourced by every
+# script). Active ONLY when stderr is a real terminal and NO_COLOR is unset — so piped output, log
+# files, and tests (which capture stderr, never a tty) stay plain. `[ -t 2 ]` sits in an `if` so
+# set -e never trips on the non-tty case.
+if [ -t 2 ] && [ -z "${NO_COLOR:-}" ]; then
+  PL_C_HEAD=$'\033[1;36m'; PL_C_OK=$'\033[1;32m'; PL_C_WARN=$'\033[1;33m'
+  PL_C_ERR=$'\033[1;31m';  PL_C_DIM=$'\033[2m';   PL_C_RST=$'\033[0m'
+else
+  PL_C_HEAD=''; PL_C_OK=''; PL_C_WARN=''; PL_C_ERR=''; PL_C_DIM=''; PL_C_RST=''
+fi
+
 pl_repo_root() { git rev-parse --show-toplevel; }
 
 pl_config_dir() { echo "${PL_CONFIG_DIR:-$(pl_repo_root)/.claude/persona-lab}"; }

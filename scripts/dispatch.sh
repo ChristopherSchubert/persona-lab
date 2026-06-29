@@ -146,7 +146,7 @@ if [ -z "$writer_line" ] && [ "${#reader_lines[@]}" -eq 0 ]; then
   if [ -n "$skipped" ]; then
     echo "dispatch: skipping ready issue(s) with no persona: label (no owner to dispatch): $skipped" >&2
   fi
-  echo "dispatch: nothing ready to dispatch" >&2
+  echo "${PL_C_DIM}dispatch: nothing ready to dispatch${PL_C_RST}" >&2
   exit 0
 fi
 
@@ -202,11 +202,11 @@ apply_gate_label() {
     approve)
       gh pr edit "$pr" --repo "$ghrepo" --add-label "$glabel"               >/dev/null 2>&1 || true
       gh pr edit "$pr" --repo "$ghrepo" --remove-label "gate:changes-requested" >/dev/null 2>&1 || true
-      echo "dispatch: <- gate ${glabel} applied to PR #${pr}" >&2 ;;
+      echo "${PL_C_OK}dispatch: <- gate ${glabel} applied to PR #${pr}${PL_C_RST}" >&2 ;;
     request-changes)
       gh pr edit "$pr" --repo "$ghrepo" --add-label "gate:changes-requested" >/dev/null 2>&1 || true
       gh pr edit "$pr" --repo "$ghrepo" --remove-label "$glabel"             >/dev/null 2>&1 || true
-      echo "dispatch: <- gate:changes-requested applied to PR #${pr} (cleared ${glabel})" >&2 ;;
+      echo "${PL_C_OK}dispatch: <- gate:changes-requested applied to PR #${pr} (cleared ${glabel})${PL_C_RST}" >&2 ;;
   esac
 }
 
@@ -256,7 +256,7 @@ dispatch_one() {
   local prompt
   prompt="$(printf '%s\n\n---\n\nYou are operating the issue above (#%s) on repo %s. Do ONE bounded unit of work for your role (ADR-0001), using only the tools you have been granted. Act on the issue body/discussion above. You do NOT post to the bus — the harness posts your record for you. End your turn by emitting your record as the FINAL ```json fenced code block in your message, with NOTHING after the closing fence. The block must contain exactly one JSON object (if your prose quotes any other JSON, the harness still takes only this last fenced block):\n```json\n{"record_type":"<ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY>","body":"<your record as GitHub-flavored markdown; if you changed code or opened a PR, cite it>"}\n```\nIf and only if you are REVIEWING a pull request, the JSON object in that final fenced block must instead be:\n{"record_type":"REVIEW","pr":<the PR number>,"verdict":"<approve|request-changes|comment>","body":"<your review as markdown, citing the commit>"}\nThe harness posts this as a real PR review (gh pr review) so the merge gate can see your verdict.\nIf your work opens a pull request, include the trailer line `Resolves-Issue: #%s` in the PR body (this issue) so the PM acceptance step can close this issue once the PR is merged — do NOT use a GitHub auto-close keyword (Closes/Fixes), which would bypass PM acceptance.\n' "$issue_ctx" "$issue_number" "$repo" "$issue_number")"
 
-  echo "dispatch: -> #${issue_number} '${persona}' (${name} · ${role}) [allowedTools: ${allowed}]" >&2
+  echo "${PL_C_HEAD}dispatch: -> #${issue_number} '${persona}' (${name} · ${role}) [allowedTools: ${allowed}]${PL_C_RST}" >&2
   local raw result record rtype body pr verdict url=""
   if raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed --output-format json 2>/dev/null)"; then
     result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null)"
@@ -281,20 +281,20 @@ dispatch_one() {
         esac
         if url="$("$here/review.sh" "$pr" --persona "$name" --tier "$role" --type "$rtype" --body "$body" --event "$event" --repo "$ghrepo" 2>&1)"; then
           outcome="dispatched"
-          echo "dispatch: <- #${issue_number} '${persona}' posted ${rtype} on PR #${pr} (${event}) -> ${url}" >&2
+          echo "${PL_C_OK}dispatch: <- #${issue_number} '${persona}' posted ${rtype} on PR #${pr} (${event}) -> ${url}${PL_C_RST}" >&2
           advance_state "$issue_number" "$rtype"   # #132: the REVIEW path must leave state:ready too
           apply_gate_label "$pr" "$persona" "$event"   # #149: the reviewer's verdict drives the merge gate
         else
-          echo "dispatch: <- #${issue_number} '${persona}' PR-REVIEW POST FAILED (PR #${pr}):" >&2
+          echo "${PL_C_ERR}dispatch: <- #${issue_number} '${persona}' PR-REVIEW POST FAILED (PR #${pr}):${PL_C_RST}" >&2
           printf '%s\n' "$url" | sed 's/^/        /' >&2
           url=""
         fi
       elif url="$("$here/queue.sh" comment "$issue_number" --persona "$name" --tier "$role" --type "$rtype" --body "$body" --repo "$ghrepo" 2>&1)"; then
         outcome="dispatched"
-        echo "dispatch: <- #${issue_number} '${persona}' posted ${rtype} -> ${url}" >&2
+        echo "${PL_C_OK}dispatch: <- #${issue_number} '${persona}' posted ${rtype} -> ${url}${PL_C_RST}" >&2
         advance_state "$issue_number" "$rtype"   # #132: drive the state machine forward off state:ready
       else
-        echo "dispatch: <- #${issue_number} '${persona}' POST FAILED (${rtype}):" >&2
+        echo "${PL_C_ERR}dispatch: <- #${issue_number} '${persona}' POST FAILED (${rtype}):${PL_C_RST}" >&2
         printf '%s\n' "$url" | sed 's/^/        /' >&2
         url=""
       fi
@@ -303,7 +303,7 @@ dispatch_one() {
       printf '%s\n' "$result" | sed 's/^/    | /' | head -40 >&2
     fi
   else
-    echo "dispatch: <- #${issue_number} '${persona}' claude invocation FAILED" >&2
+    echo "${PL_C_ERR}dispatch: <- #${issue_number} '${persona}' claude invocation FAILED${PL_C_RST}" >&2
   fi
 
   local rl_extra=(); [ -n "$url" ] && rl_extra=(--artifact-url "$url")
@@ -324,7 +324,7 @@ dispatch_one() {
 reader_pids=()
 for line in ${reader_lines[@]+"${reader_lines[@]}"}; do
   rn="${line%%$'\t'*}"; rp="${line#*$'\t'}"
-  echo "dispatch: -> reader #${rn} '${rp}' (background)" >&2
+  echo "${PL_C_HEAD}dispatch: -> reader #${rn} '${rp}' (background)${PL_C_RST}" >&2
   dispatch_one "$rn" "$rp" >/dev/null 2>&1 &
   reader_pids+=("$!")
 done

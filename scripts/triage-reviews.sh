@@ -51,7 +51,7 @@ existing="$(gh issue list --repo "$ghrepo" --state open --json title --limit 300
 
 prompt="$(printf 'You are the PM triaging open pull requests into REVIEW tasks, routing each to its gate owner(s) per the RACI:\n- EVERY PR needs the Lead Engineer (reviewer slug: lead-engineer).\n- A PR that changes tests/ or scripts/ ALSO needs Head of QA (head-of-qa).\n- A PR with visual/UI changes ALSO needs Head of Design (head-of-design).\n\nOpen PRs awaiting review (number, title, files):\n%s\n\nReview tasks ALREADY open — do NOT duplicate (match on title):\n%s\n\nYou CANNOT file issues — return ONLY the FINAL ```json fenced array, nothing after the closing fence. One item per (PR, reviewer):\n```json\n[{"pr":<number>,"reviewer":"<lead-engineer|head-of-qa|head-of-design>","priority":"<p0|p1|p2|p3>","title":"Review PR #<number> — <Role>","body":"<what this gate should check, as markdown>"}]\n```\n' "$pending" "${existing:-(none)}")"
 
-echo "triage-reviews: -> PM (${name}) routing ${count} PR(s) awaiting review" >&2
+echo "${PL_C_HEAD}triage-reviews: -> PM (${name}) routing ${count} PR(s) awaiting review${PL_C_RST}" >&2
 raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed --output-format json 2>/dev/null || true)"
 result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null || true)"
 [ -n "$result" ] || result="$raw"
@@ -86,7 +86,7 @@ for ((i=0; i<n; i++)); do
     "$here/queue.sh" label "$num" --add "priority:${prio}"    --repo "$ghrepo" >/dev/null 2>&1 || true
     existing="$(printf '%s\n%s' "$existing" "$title")"
     filed=$((filed+1))
-    echo "triage-reviews: filed #${num} '${title}' → persona:${reviewer} state:ready ${prio}" >&2
+    echo "${PL_C_OK}triage-reviews: filed #${num} '${title}' → persona:${reviewer} state:ready ${prio}${PL_C_RST}" >&2
   else
     echo "triage-reviews: FILE FAILED for '${title}':" >&2; printf '%s\n' "$url" | sed 's/^/    /' >&2
   fi
@@ -94,5 +94,5 @@ done
 
 "$here/runlog.sh" append --persona "product-manager" --repo "$repo" --trigger "triage-reviews" \
   --outcome "triaged" --record-type "triage" --action "route-reviews" 2>/dev/null || true
-echo "triage-reviews: pass complete — ${filed} review task(s) filed, ${dup} duplicate(s) skipped" >&2
+echo "${PL_C_HEAD}triage-reviews: pass complete — ${filed} review task(s) filed, ${dup} duplicate(s) skipped${PL_C_RST}" >&2
 exit 0

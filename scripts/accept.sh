@@ -50,12 +50,12 @@ for pr in $nums; do
     gh pr edit "$pr" --repo "$ghrepo" --remove-label "state:merged"   >/dev/null 2>&1 || true
     "$here/runlog.sh" append --persona "product-manager" --repo "$repo" --trigger "accept" \
       --outcome "accepted" --record-type "accept" --action "close" --issue-number "$issue" 2>/dev/null || true
-    echo "accept: #${issue} accepted & closed (PR #${pr}) → state:accepted" >&2
+    echo "${PL_C_OK}accept: #${issue} accepted & closed (PR #${pr}) → state:accepted${PL_C_RST}" >&2
     accepted=$((accepted+1))
   else
     echo "accept: PR #${pr} → #${issue} acceptance post FAILED — NOT closing (proof-first, ADR-0001)" >&2
   fi
 done
 
-echo "accept: pass complete — ${accepted} accepted" >&2
+echo "${PL_C_HEAD}accept: pass complete — ${accepted} accepted${PL_C_RST}" >&2
 exit 0
