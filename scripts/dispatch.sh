@@ -171,6 +171,40 @@ _valid_rtype() { case "$1" in
   ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY) return 0;; *) return 1;;
 esac; }
 
+# Drive the ADR-0001 state machine FORWARD after a record lands (issue #132 — the treadmill
+# fix). Before this, dispatch_one posted a record but left `state:ready` on the issue, so the
+# next cycle re-selected the SAME issue forever and lower items starved. Personas can't fix
+# this — they have no shell. The harness (which does) is the only place the transition can be
+# applied, so it maps the record type to the next sub-state (#37: in_progress/in_review/parked)
+# and, critically, REMOVES `state:ready` so the issue leaves the Act queue.
+#
+# Mapping (record type → next state), per the ADR-0001 transition table:
+#   DELIVERED  → in_review   (SUBMIT: hand to the Greg/Priya review gates)
+#   BLOCKER    → parked      (PARK:   blocked; owner/deadline live in the record body)
+#   ASK        → parked      (ASK parks the issue while it waits on input)
+#   else       → in_progress (worked, not yet delivered; off the queue pending the next step)
+# Removing `state:ready` is the load-bearing half: selection requires it, so a worked issue
+# can't be re-picked. A persona needing another turn does NOT silently stay ready — the PM
+# (or a RESUME) must re-ready it, so multi-turn work is explicit, not accidental.
+advance_state() {
+  local n="$1" rt="$2" next
+  case "$rt" in
+    DELIVERED)   next="state:in_review";;
+    BLOCKER|ASK) next="state:parked";;
+    *)           next="state:in_progress";;
+  esac
+  # One atomic edit sets the next state AND drops state:ready — if this fails the issue stays
+  # ready (re-selectable) rather than floating with no state, and we log loudly. dev:ready is
+  # cleaned up best-effort afterwards: it's inert once state:ready is gone (selection needs
+  # state:ready), so a stray dev:ready can't resurrect the treadmill.
+  if gh issue edit "$n" --repo "$ghrepo" --add-label "$next" --remove-label "state:ready" >/dev/null 2>&1; then
+    echo "dispatch: state #${n} -> ${next} (left state:ready) [${rt}]" >&2
+    gh issue edit "$n" --repo "$ghrepo" --remove-label "dev:ready" >/dev/null 2>&1 || true
+  else
+    echo "dispatch: WARNING #${n} state advance FAILED — stays state:ready, will re-select [${rt}]" >&2
+  fi
+}
+
 # Best-effort extract one JSON object from a persona's result text (raw, or ```-fenced).
 _extract_json() {
   local in; in="$(cat)"
@@ -214,6 +248,7 @@ dispatch_one() {
       if url="$("$here/queue.sh" comment "$issue_number" --persona "$name" --tier "$role" --type "$rtype" --body "$body" --repo "$ghrepo" 2>&1)"; then
         outcome="dispatched"
         echo "dispatch: <- #${issue_number} '${persona}' posted ${rtype} -> ${url}" >&2
+        advance_state "$issue_number" "$rtype"   # #132: drive the state machine forward off state:ready
       else
         echo "dispatch: <- #${issue_number} '${persona}' POST FAILED (${rtype}):" >&2
         printf '%s\n' "$url" | sed 's/^/        /' >&2

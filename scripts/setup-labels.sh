@@ -21,6 +21,12 @@ mk "state:ready" "0E8A16" "ADR-0001 ready state: triaged, in the Act queue, disp
 # the issue is safe for the Developer to build. The dispatch.sh WRITER partition requires
 # BOTH state:ready AND dev:ready; readers route on state:ready alone.
 mk "dev:ready" "1F6F3C" "Upstream done — eligible for the Developer to build (dispatch.sh writer gate, #37)"
+# ADR-0001 sub-states the harness advances an issue INTO after it's worked (#132): a posted
+# record removes `state:ready` and applies one of these, so the same issue can't be re-selected
+# every cycle (the treadmill). Not dispatchable (selection requires `state:ready`).
+mk "state:in_progress" "FBCA04" "ADR-0001: worked, not yet delivered — off the Act queue pending the next step (#132)"
+mk "state:in_review"   "5319E7" "ADR-0001: DELIVERED — in the Greg/Priya review gates (#132)"
+mk "state:parked"      "C5DEF5" "ADR-0001: parked on a BLOCKER/ASK — owner+deadline in the record (#132)"
 mk "priority:p0" "B60205" "Priority P0 — dispatched before lower priorities"
 mk "priority:p1" "D93F0B" "Priority P1"
 mk "priority:p2" "FBCA04" "Priority P2"
