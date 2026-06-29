@@ -67,15 +67,9 @@ fi
 
 # ── Helpers ───────────────────────────────────────────────────────────────────────────
 _valid_rtype() { case "$1" in ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY) return 0;; *) return 1;; esac; }
-# Best-effort extract one JSON value (object or array) from a persona's result text — tolerant of
-# prose wrappers and ```-fences (models add them despite "ONLY JSON").
-_extract_json() {
-  local in; in="$(cat)"
-  printf '%s' "$in" | jq -ce . 2>/dev/null && return 0                          # already clean JSON
-  printf '%s' "$in" | awk '/^```/{f=!f; next} {print}' | jq -ce . 2>/dev/null && return 0  # strip ``` fences
-  printf '%s' "$in" | perl -0777 -ne 'print $& if /(\[.*\]|\{.*\})/s' 2>/dev/null | jq -ce . 2>/dev/null && return 0  # first [...]/{...} block
-  return 1
-}
+# Extract the findings array from a persona's result text (clean, ```-fenced, or prose-wrapped).
+# Shared with dispatch via lib/common.sh (issue #153) so the parse fix lives in one place.
+_extract_json() { pl_extract_json; }
 
 # Invoke a persona and echo its final result text. PL_STREAM=1 streams the turn LIVE to stderr
 # (one line per tool call + text), so a run isn't a silent black box; default is buffered.

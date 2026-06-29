@@ -77,4 +77,46 @@ pl_envelope() { # persona tier type body
     "$avatar" "$persona" "$rtype" "$color" "$role" "$body"
 }
 
+# Best-effort extract one JSON value (object OR array) from a persona's result text. The model
+# may return clean JSON, a ```-fenced block, or JSON wrapped in prose. Reads stdin; on success
+# prints the compact JSON and returns 0; returns 1 if nothing parses.
+#
+# Order matters (issue #153 — Sarah's predicted "[note] … {json}" edge case):
+#   1. already-clean JSON — pass straight through.
+#   2. content INSIDE a ``` fence — print ONLY fenced lines (the model fences its JSON), so prose
+#      OUTSIDE the fence that itself contains "[" / "{" (e.g. a finding *about* "[roster]" copy, or
+#      a "[--grace-min N]" flag) can't corrupt the parse.
+#   3. balanced-bracket scan — emit each top-level [...]/{...} candidate (string/escape aware) and
+#      return the FIRST that validates as JSON. This replaces a greedy `(\[.*\]|\{.*\})` first-[ match
+#      that grabbed from a prose bracket through the array's last "]", yielding invalid JSON and
+#      silently dropping real findings/records.
+# Known limit: if prose contains a *coincidentally valid* JSON value (e.g. "[1, 2]") before the real
+# one and neither is fenced, step 3 returns the prose value. Fencing (step 2) avoids this; personas fence.
+pl_extract_json() {
+  local in cand; in="$(cat)"
+  printf '%s' "$in" | jq -ce . 2>/dev/null && return 0
+  printf '%s' "$in" | awk '/^[[:space:]]*```/{f=!f; next} f' | jq -ce . 2>/dev/null && return 0
+  while IFS= read -r -d '' cand; do
+    printf '%s' "$cand" | jq -ce . 2>/dev/null && return 0
+  done < <(printf '%s' "$in" | perl -0777 -ne '
+    my $s=$_; my $len=length $s; my $i=0;
+    while ($i<$len) {
+      my $c=substr($s,$i,1);
+      if ($c eq "{" || $c eq "[") {
+        my ($d,$j,$instr,$esc)=(0,$i,0,0);
+        while ($j<$len) {
+          my $x=substr($s,$j,1);
+          if ($instr) { if ($esc){$esc=0} elsif ($x eq "\\"){$esc=1} elsif ($x eq "\""){$instr=0} }
+          elsif ($x eq "\""){$instr=1}
+          elsif ($x eq "{" || $x eq "["){$d++}
+          elsif ($x eq "}" || $x eq "]"){$d--; if($d==0){last}}
+          $j++;
+        }
+        if ($d==0 && $j<$len){ print substr($s,$i,$j-$i+1), "\0"; $i=$j+1; next; }
+      }
+      $i++;
+    }')
+  return 1
+}
+
 pl_die() { echo "persona-lab: $*" >&2; exit 1; }

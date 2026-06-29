@@ -171,14 +171,9 @@ _valid_rtype() { case "$1" in
   ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY) return 0;; *) return 1;;
 esac; }
 
-# Best-effort extract one JSON object from a persona's result text (raw, or ```-fenced).
-_extract_json() {
-  local in; in="$(cat)"
-  printf '%s' "$in" | jq -ce . 2>/dev/null && return 0                          # already clean JSON
-  printf '%s' "$in" | awk '/^```/{f=!f; next} {print}' | jq -ce . 2>/dev/null && return 0  # strip ``` fences
-  printf '%s' "$in" | perl -0777 -ne 'print $& if /(\[.*\]|\{.*\})/s' 2>/dev/null | jq -ce . 2>/dev/null && return 0  # first [...]/{...} block (prose-wrapped)
-  return 1
-}
+# Extract one JSON record from a persona's result text (clean, ```-fenced, or prose-wrapped).
+# Shared with audit-sweep via lib/common.sh (issue #153) so the parse fix lives in one place.
+_extract_json() { pl_extract_json; }
 
 # Dispatch one unit of work and POST THE PERSONA'S RECORD on its behalf.
 # Why the harness posts (issue #9 access-model fix): most personas are read-only (Read,Grep,Glob)
