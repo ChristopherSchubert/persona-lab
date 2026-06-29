@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Stateful stub of `gh` (Git Data API + `issue create`) for persona-lab lock/watchdog tests.
+#
+# State lives under $PL_GH_STATE (required):
+#   refs/<encoded-ref>   file whose contents are the target sha (ref exists ⇒ file exists)
+#   commits/<sha>.json   the commit object (committer.date + message)
+#   seq                  monotonic counter backing fake shas / issue numbers
+#
+# Fidelity to the real API that the tests depend on:
+#   - ref create is create-only: POST to an existing ref ⇒ HTTP 422 + exit 1 (the CAS).
+#   - commit committer.date can be back-dated via PL_GH_FAKE_DATE so a test can mint a
+#     lock that is already older than the watchdog grace window (interrupted-dispatch sim).
+#   - PATCH or any `force` field is REFUSED (exit 3): the recovery path must never force.
+set -euo pipefail
+state="${PL_GH_STATE:?PL_GH_STATE not set}"
+mkdir -p "$state/refs" "$state/commits"
+
+enc()   { printf '%s' "$1" | tr '/' '%'; }
+next()  { local n; n=$(( $(cat "$state/seq" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$state/seq"; printf '%s' "$n"; }
+mksha() { printf '%040d' "$(next)"; }
+
+# `gh issue create …` → emit a plausible issue URL.
+if [ "${1:-}" = "issue" ] && [ "${2:-}" = "create" ]; then
+  printf 'https://github.com/o/r/issues/%s\n' "$(next)"; exit 0
+fi
+
+[ "${1:-}" = "api" ] || { echo "stub: unhandled gh $*" >&2; exit 2; }
+shift
+
+method="GET"
+if [ "${1:-}" = "-X" ]; then method="$2"; shift 2; fi
+[ "$method" = "PATCH" ] && { echo "stub: PATCH refused (no force in recovery path)" >&2; exit 3; }
+url="$1"; shift
+
+msg=""; ref=""; sha=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -f)
+      case "$2" in
+        message=*) msg="${2#message=}";;
+        ref=*)     ref="${2#ref=}";;
+        sha=*)     sha="${2#sha=}";;
+        force=*|*force=true*) echo "stub: force field refused" >&2; exit 3;;
+      esac; shift 2;;
+    -q|--jq) shift 2;;
+    *) shift;;
+  esac
+done
+
+case "$url" in
+  *git/blobs|*git/trees) mksha; echo; exit 0;;
+  *git/commits)  # create commit
+    s="$(mksha)"; d="${PL_GH_FAKE_DATE:-$(date -u +%FT%TZ)}"
+    jq -nc --arg s "$s" --arg d "$d" --arg m "$msg" \
+      '{sha:$s, committer:{date:$d}, author:{date:$d}, message:$m}' > "$state/commits/$s.json"
+    printf '%s\n' "$s"; exit 0;;
+  */git/commits/*)  # read commit
+    s="${url##*/git/commits/}"; cat "$state/commits/$s.json"; exit 0;;
+  *git/matching-refs/heads/persona-lock/*)  # list persona-lock/<repo> refs (not the -archive ns)
+    for f in "$state"/refs/*; do
+      [ -e "$f" ] || continue
+      r="$(basename "$f" | tr '%' '/')"
+      case "$r" in refs/heads/persona-lock/*) printf '%s\t%s\n' "$r" "$(cat "$f")";; esac
+    done; exit 0;;
+  *git/refs)  # create ref (create-only CAS)
+    f="$state/refs/$(enc "$ref")"
+    [ -e "$f" ] && { echo "HTTP 422 Reference already exists" >&2; exit 1; }
+    printf '%s' "$sha" > "$f"; printf '%s\n' "$sha"; exit 0;;
+  *git/refs/*|*git/heads/*)  # read or delete a specific ref
+    r="${url##*/git/}"; f="$state/refs/$(enc "$r")"
+    if [ "$method" = "DELETE" ]; then rm -f "$f"; exit 0; fi
+    [ -e "$f" ] && { cat "$f"; echo; exit 0; }
+    echo "404 Not Found" >&2; exit 1;;
+esac
+echo "stub: unhandled url $url" >&2; exit 2
