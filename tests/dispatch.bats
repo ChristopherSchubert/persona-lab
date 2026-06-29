@@ -586,3 +586,40 @@ SH
   grep -q "claim" "$PL_LOCK_LOG"
   # MUTATION PROOF: gate doc-writers on dev:ready too → #304 not dispatched, this fails.
 }
+
+# ── Robust record parsing + raw-dump (parity with audit-sweep) ─────────────────────────
+
+@test "dispatch: parses a record the model wrapped in prose (robust extraction)" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"Here is my reply: {\\"record_type\\":\\"REPLY\\",\\"body\\":\\"the convention\\"} — hope that helps"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":13,"title":"ask","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF "issue comment" "$PL_GH_LOG"   # the prose-wrapped record still posted
+  grep -qF "REPLY" "$PL_GH_LOG"
+  # MUTATION PROOF: drop the perl bracket fallback → prose-wrapped record unparsed, this fails.
+}
+
+@test "dispatch: dumps the raw output when the record won't parse (no silent drop)" {
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"I am not sure how to format this, sorry."}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":11,"title":"dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qF "raw output"
+  echo "$output" | grep -qF "I am not sure"   # the actual model text is surfaced (foreground mutator)
+  if grep -qF "issue comment" "$PL_GH_LOG"; then false; fi
+  # MUTATION PROOF: swallow the result on parse failure → "raw output" absent, this fails.
+}
