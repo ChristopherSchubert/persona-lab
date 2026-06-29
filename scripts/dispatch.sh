@@ -186,6 +186,30 @@ esac; }
 # Removing `state:ready` is the load-bearing half: selection requires it, so a worked issue
 # can't be re-picked. A persona needing another turn does NOT silently stay ready — the PM
 # (or a RESUME) must re-ready it, so multi-turn work is explicit, not accidental.
+# Map a REVIEWER persona to the merge-gate label its approval satisfies — the FIXED code/QA gates
+# (CLAUDE.md): Lead Engineer → eng gate, Head of QA → qa gate. Other personas may review or comment on
+# a PR but do not drive the merge gate. Returns "" for non-gating reviewers.
+gate_label_for() { case "$1" in lead-engineer) echo "gate:eng-approved";; head-of-qa) echo "gate:qa-approved";; esac; }
+
+# When a gating reviewer posts a verdict on a PR, label the PR for integrate.sh (#149) — this is how
+# the loop labels ITSELF (no human/orchestrator hand-applies gate state). approve → add the reviewer's
+# gate label + clear any block; request-changes → set the blocking label + clear that reviewer's
+# approval. add/remove are separate gh calls so a missing-label removal can't drop the add (set -e).
+apply_gate_label() {
+  local pr="$1" persona="$2" event="$3" glabel
+  glabel="$(gate_label_for "$persona")"; [ -n "$glabel" ] || return 0
+  case "$event" in
+    approve)
+      gh pr edit "$pr" --repo "$ghrepo" --add-label "$glabel"               >/dev/null 2>&1 || true
+      gh pr edit "$pr" --repo "$ghrepo" --remove-label "gate:changes-requested" >/dev/null 2>&1 || true
+      echo "dispatch: <- gate ${glabel} applied to PR #${pr}" >&2 ;;
+    request-changes)
+      gh pr edit "$pr" --repo "$ghrepo" --add-label "gate:changes-requested" >/dev/null 2>&1 || true
+      gh pr edit "$pr" --repo "$ghrepo" --remove-label "$glabel"             >/dev/null 2>&1 || true
+      echo "dispatch: <- gate:changes-requested applied to PR #${pr} (cleared ${glabel})" >&2 ;;
+  esac
+}
+
 advance_state() {
   local n="$1" rt="$2" next
   case "$rt" in
@@ -259,6 +283,7 @@ dispatch_one() {
           outcome="dispatched"
           echo "dispatch: <- #${issue_number} '${persona}' posted ${rtype} on PR #${pr} (${event}) -> ${url}" >&2
           advance_state "$issue_number" "$rtype"   # #132: the REVIEW path must leave state:ready too
+          apply_gate_label "$pr" "$persona" "$event"   # #149: the reviewer's verdict drives the merge gate
         else
           echo "dispatch: <- #${issue_number} '${persona}' PR-REVIEW POST FAILED (PR #${pr}):" >&2
           printf '%s\n' "$url" | sed 's/^/        /' >&2
