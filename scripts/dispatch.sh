@@ -174,8 +174,9 @@ esac; }
 # Best-effort extract one JSON object from a persona's result text (raw, or ```-fenced).
 _extract_json() {
   local in; in="$(cat)"
-  printf '%s' "$in" | jq -ce . 2>/dev/null && return 0
-  printf '%s' "$in" | awk '/^```/{f=!f; next} {print}' | jq -ce . 2>/dev/null && return 0
+  printf '%s' "$in" | jq -ce . 2>/dev/null && return 0                          # already clean JSON
+  printf '%s' "$in" | awk '/^```/{f=!f; next} {print}' | jq -ce . 2>/dev/null && return 0  # strip ``` fences
+  printf '%s' "$in" | perl -0777 -ne 'print $& if /(\[.*\]|\{.*\})/s' 2>/dev/null | jq -ce . 2>/dev/null && return 0  # first [...]/{...} block (prose-wrapped)
   return 1
 }
 
@@ -207,14 +208,17 @@ dispatch_one() {
     rtype="$(printf '%s' "$record" | jq -r '.record_type // empty' 2>/dev/null)"
     body="$(printf '%s'  "$record" | jq -r '.body // empty'        2>/dev/null)"
     if _valid_rtype "$rtype" && [ -n "$body" ]; then
-      if url="$("$here/queue.sh" comment "$issue_number" --persona "$name" --tier "$role" --type "$rtype" --body "$body" --repo "$ghrepo" 2>/dev/null)"; then
+      if url="$("$here/queue.sh" comment "$issue_number" --persona "$name" --tier "$role" --type "$rtype" --body "$body" --repo "$ghrepo" 2>&1)"; then
         outcome="dispatched"
         echo "dispatch: <- #${issue_number} '${persona}' posted ${rtype} -> ${url}" >&2
       else
-        url=""; echo "dispatch: <- #${issue_number} '${persona}' POST FAILED (${rtype})" >&2
+        echo "dispatch: <- #${issue_number} '${persona}' POST FAILED (${rtype}):" >&2
+        printf '%s\n' "$url" | sed 's/^/        /' >&2
+        url=""
       fi
     else
-      echo "dispatch: <- #${issue_number} '${persona}' returned no valid record (rtype='${rtype}')" >&2
+      echo "dispatch: <- #${issue_number} '${persona}' returned no valid record (rtype='${rtype}') — raw output:" >&2
+      printf '%s\n' "$result" | sed 's/^/    | /' | head -40 >&2
     fi
   else
     echo "dispatch: <- #${issue_number} '${persona}' claude invocation FAILED" >&2
