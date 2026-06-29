@@ -82,14 +82,14 @@ for num in $nums; do
     gh pr edit "$num" --repo "$ghrepo" --add-label "state:merged" >/dev/null 2>&1 || true
     "$here/runlog.sh" append --persona "release-engineer" --repo "$repo" --trigger "integrate" \
       --outcome "merged" --record-type "integrate" --action "merge" --issue-number "$num" 2>/dev/null || true
-    echo "integrate: merged PR #${num} (squash) -> labelled state:merged, handed to PM for acceptance close" >&2
+    echo "${PL_C_OK}integrate: merged PR #${num} (squash) -> labelled state:merged, handed to PM for acceptance close${PL_C_RST}" >&2
     merged=$((merged+1))
   else
-    echo "integrate: PR #${num} merge FAILED (left open, gates intact)" >&2
+    echo "${PL_C_ERR}integrate: PR #${num} merge FAILED (left open, gates intact)${PL_C_RST}" >&2
   fi
 done
 
-echo "integrate: pass complete — ${merged} merged" >&2
+echo "${PL_C_HEAD}integrate: pass complete — ${merged} merged${PL_C_RST}" >&2
 exit 0
 
 # ──────────────────────────────────────────────────────────────────────────────────────
