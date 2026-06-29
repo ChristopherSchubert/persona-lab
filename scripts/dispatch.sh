@@ -189,9 +189,9 @@ esac; }
 advance_state() {
   local n="$1" rt="$2" next
   case "$rt" in
-    DELIVERED)   next="state:in_review";;
-    BLOCKER|ASK) next="state:parked";;
-    *)           next="state:in_progress";;
+    DELIVERED|REVIEW) next="state:in_review";;
+    BLOCKER|ASK)      next="state:parked";;
+    *)                next="state:in_progress";;
   esac
   # One atomic edit sets the next state AND drops state:ready — if this fails the issue stays
   # ready (re-selectable) rather than floating with no state, and we log loudly. dev:ready is
@@ -230,18 +230,41 @@ dispatch_one() {
   # operates on the REAL task instead of just "issue #N" (#125).
   local issue_ctx; issue_ctx="$(pl_issue_context "$issue_number" "$ghrepo")"
   local prompt
-  prompt="$(printf '%s\n\n---\n\nYou are operating the issue above (#%s) on repo %s. Do ONE bounded unit of work for your role (ADR-0001), using only the tools you have been granted. Act on the issue body/discussion above. You do NOT post to the bus — the harness posts your record for you. End your turn by emitting your record as the FINAL ```json fenced code block in your message, with NOTHING after the closing fence. The block must contain exactly one JSON object (if your prose quotes any other JSON, the harness still takes only this last fenced block):\n```json\n{"record_type":"<ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY>","body":"<your record as GitHub-flavored markdown; if you changed code or opened a PR, cite it>"}\n```\n' "$issue_ctx" "$issue_number" "$repo")"
+  prompt="$(printf '%s\n\n---\n\nYou are operating the issue above (#%s) on repo %s. Do ONE bounded unit of work for your role (ADR-0001), using only the tools you have been granted. Act on the issue body/discussion above. You do NOT post to the bus — the harness posts your record for you. End your turn by emitting your record as the FINAL ```json fenced code block in your message, with NOTHING after the closing fence. The block must contain exactly one JSON object (if your prose quotes any other JSON, the harness still takes only this last fenced block):\n```json\n{"record_type":"<ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY>","body":"<your record as GitHub-flavored markdown; if you changed code or opened a PR, cite it>"}\n```\nIf and only if you are REVIEWING a pull request, the JSON object in that final fenced block must instead be:\n{"record_type":"REVIEW","pr":<the PR number>,"verdict":"<approve|request-changes|comment>","body":"<your review as markdown, citing the commit>"}\nThe harness posts this as a real PR review (gh pr review) so the merge gate can see your verdict.\n' "$issue_ctx" "$issue_number" "$repo")"
 
   echo "dispatch: -> #${issue_number} '${persona}' (${name} · ${role}) [allowedTools: ${allowed}]" >&2
-  local raw result record rtype body url=""
+  local raw result record rtype body pr verdict url=""
   if raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed --output-format json 2>/dev/null)"; then
     result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null)"
     [ -n "$result" ] || result="$raw"        # tolerate non-envelope output (stubs / --output-format text)
     record="$(printf '%s' "$result" | _extract_json || true)"
     rtype="$(printf '%s' "$record" | jq -r '.record_type // empty' 2>/dev/null)"
     body="$(printf '%s'  "$record" | jq -r '.body // empty'        2>/dev/null)"
+    # #195: a REVIEW record that names a `pr` is a verdict ON that PR — it must land as a real
+    # `gh pr review` (so GitHub's review state is set and the merge gate can see it), not as an
+    # issue comment. `verdict` is the reviewer's call; map it to gh's review event.
+    pr="$(printf '%s'      "$record" | jq -r '.pr // empty'      2>/dev/null)"
+    verdict="$(printf '%s' "$record" | jq -r '.verdict // empty' 2>/dev/null)"
     if _valid_rtype "$rtype" && [ -n "$body" ]; then
-      if url="$("$here/queue.sh" comment "$issue_number" --persona "$name" --tier "$role" --type "$rtype" --body "$body" --repo "$ghrepo" 2>&1)"; then
+      if [ "$rtype" = "REVIEW" ] && [ -n "$pr" ]; then
+        local event
+        case "$verdict" in
+          approve|approved)                                   event="approve" ;;
+          request-changes|request_changes|changes-requested) event="request-changes" ;;
+          comment) event="comment" ;;
+          *) event="comment"
+             [ -n "$verdict" ] && echo "dispatch: <- #${issue_number} '${persona}' unrecognized verdict '${verdict}' — posting as a plain PR comment" >&2 ;;
+        esac
+        if url="$("$here/review.sh" "$pr" --persona "$name" --tier "$role" --type "$rtype" --body "$body" --event "$event" --repo "$ghrepo" 2>&1)"; then
+          outcome="dispatched"
+          echo "dispatch: <- #${issue_number} '${persona}' posted ${rtype} on PR #${pr} (${event}) -> ${url}" >&2
+          advance_state "$issue_number" "$rtype"   # #132: the REVIEW path must leave state:ready too
+        else
+          echo "dispatch: <- #${issue_number} '${persona}' PR-REVIEW POST FAILED (PR #${pr}):" >&2
+          printf '%s\n' "$url" | sed 's/^/        /' >&2
+          url=""
+        fi
+      elif url="$("$here/queue.sh" comment "$issue_number" --persona "$name" --tier "$role" --type "$rtype" --body "$body" --repo "$ghrepo" 2>&1)"; then
         outcome="dispatched"
         echo "dispatch: <- #${issue_number} '${persona}' posted ${rtype} -> ${url}" >&2
         advance_state "$issue_number" "$rtype"   # #132: drive the state machine forward off state:ready

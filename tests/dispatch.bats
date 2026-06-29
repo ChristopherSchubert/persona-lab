@@ -735,3 +735,82 @@ SH
   grep -qF "INJECTED_TASK_CONTEXT" "$PL_CLAUDE_LOG"   # the persona received its task, not just "issue #N"
   # MUTATION PROOF: drop pl_issue_context from the prompt → context absent, this fails.
 }
+
+# ── #195: a review verdict lands on the PR, not the issue ────────────────────────────────
+
+@test "dispatch: REVIEW record naming a pr+verdict posts a PR review, not an issue comment" {
+  # A review work item: the lead engineer is assigned to review PR #190.
+  fake_issues '[
+    {"number":192,"title":"Greg: code-review PR #190","labels":[{"name":"state:ready"},{"name":"persona:lead-engineer"},{"name":"priority:p0"}]}
+  ]'
+  # The reviewer returns a REVIEW verdict that names the PR and the verdict it reached.
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"REVIEW\\",\\"pr\\":190,\\"verdict\\":\\"approve\\",\\"body\\":\\"Approved at eb4b9e4.\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  # Verdict routed to the PR as a real review (review.sh -> gh pr review 190 --approve).
+  grep -qE "pr review.*190.*--approve" "$PL_GH_LOG"
+  # And NOT buried as an issue comment on the review issue.
+  if grep -qE "issue comment.*192" "$PL_GH_LOG"; then false; fi
+  # The review TASK must advance off state:ready so it doesn't re-dispatch every cycle (#132 treadmill).
+  grep -qF "state:in_review" "$PL_GH_LOG"
+  grep -qF -- "--remove-label state:ready" "$PL_GH_LOG"
+  # MUTATION PROOF: route REVIEW-with-pr back through queue.sh comment → "pr review" absent, this fails;
+  # drop advance_state from the PR-review success path → "state:in_review" absent, this fails.
+}
+
+@test "dispatch: REVIEW record naming a pr maps request-changes verdict to gh pr review --request-changes" {
+  fake_issues '[
+    {"number":192,"title":"Greg: code-review PR #190","labels":[{"name":"state:ready"},{"name":"persona:lead-engineer"},{"name":"priority:p0"}]}
+  ]'
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"REVIEW\\",\\"pr\\":190,\\"verdict\\":\\"request-changes\\",\\"body\\":\\"B1 must be fixed.\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qE "pr review.*190.*--request-changes" "$PL_GH_LOG"
+  if grep -qE "issue comment.*192" "$PL_GH_LOG"; then false; fi
+}
+
+@test "dispatch: a REVIEW verdict of 'comment' maps to a plain gh pr review --comment" {
+  fake_issues '[
+    {"number":192,"title":"Greg: note on PR #190","labels":[{"name":"state:ready"},{"name":"persona:lead-engineer"},{"name":"priority:p0"}]}
+  ]'
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"REVIEW\\",\\"pr\\":190,\\"verdict\\":\\"comment\\",\\"body\\":\\"One note, non-blocking.\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qE "pr review.*190.*--comment" "$PL_GH_LOG"
+  if grep -qE "issue comment.*192" "$PL_GH_LOG"; then false; fi
+}
+
+@test "dispatch: a non-PR record (no pr field) still posts as an issue comment" {
+  fake_issues '[
+    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"{\\"record_type\\":\\"DELIVERED\\",\\"body\\":\\"Shipped.\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qE "issue comment.*11" "$PL_GH_LOG"
+  if grep -qE "pr review" "$PL_GH_LOG"; then false; fi
+}
