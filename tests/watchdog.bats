@@ -89,3 +89,41 @@ setup_locks() {
   # a benign live re-claim is not an incident: nothing was reclaimed
   if echo "$output" | grep -q "RECLAIMED"; then false; fi
 }
+# `watchdog.sh prune-worktrees` sweeps the worktree root and removes any dir older than the
+# grace window — mirroring the reclaim-locks pattern. `git` is stubbed so the sweep is
+# observable without a real checkout; the stub rm's the dir on `worktree remove`.
+_stub_git_wt() {
+  export PL_GIT_LOG="$(mktemp)"; export PL_TEST_BIN="$(mktemp -d)"; export PATH="$PL_TEST_BIN:$PATH"
+  cat > "$PL_TEST_BIN/git" <<'SH'
+#!/usr/bin/env bash
+echo "GIT $*" >> "$PL_GIT_LOG"
+if [ "$1" = "worktree" ] && [ "$2" = "remove" ]; then rm -rf "$4"; fi
+exit 0
+SH
+  chmod +x "$PL_TEST_BIN/git"
+}
+
+@test "watchdog: prune-worktrees removes a leaked worktree older than the grace window" {
+  _stub_git_wt
+  wt_root="$(mktemp -d)/wt"; mkdir -p "$wt_root/developer-11"
+  touch -t 200001010000 "$wt_root/developer-11" 2>/dev/null \
+    || touch -d '2000-01-01' "$wt_root/developer-11"
+  PL_WT_ROOT="$wt_root" run scripts/watchdog.sh prune-worktrees --grace-min 30
+  [ "$status" -eq 0 ]
+  grep -qF "worktree remove" "$PL_GIT_LOG"
+  echo "$output" | grep -qiF "pruned"
+  [ ! -d "$wt_root/developer-11" ]
+  rm -rf "${wt_root%/wt}"
+  # MUTATION PROOF: skip the prune-worktrees subcommand → no "worktree remove", this fails.
+}
+
+@test "watchdog: prune-worktrees leaves a FRESH worktree alone (within grace)" {
+  _stub_git_wt
+  wt_root="$(mktemp -d)/wt"; mkdir -p "$wt_root/developer-12"   # just created → fresh
+  PL_WT_ROOT="$wt_root" run scripts/watchdog.sh prune-worktrees --grace-min 30
+  [ "$status" -eq 0 ]
+  [ -d "$wt_root/developer-12" ]                                 # not pruned — still in use
+  if grep -qF "worktree remove" "$PL_GIT_LOG"; then false; fi
+  rm -rf "${wt_root%/wt}"
+  # MUTATION PROOF: drop the mtime/grace filter → the fresh worktree is removed, this fails.
+}

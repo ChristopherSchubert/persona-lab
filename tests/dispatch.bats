@@ -974,3 +974,87 @@ SH
   [ "$status" -eq 0 ]
   if grep -q -- "--model" "$PL_CLAUDE_LOG"; then false; fi
 }
+
+# ── Per-dispatch git worktree isolation (issue #109) ──────────────────────────────────
+# Each MUTATOR dispatch runs in its OWN ephemeral worktree cut from a pinned origin/<default>
+# on a fresh branch pl/<persona>/issue-<n>, so no dispatch ever inherits another's HEAD and
+# concurrent mutators can't clobber a shared tree. Readers (read-only) get NONE. Reversible
+# default: OFF unless PL_WORKTREE_ISOLATION=1 (mirrors PL_READONLY_CAP), so the existing tests
+# above exercise the in-tree path unchanged. `git` is stubbed: the stub creates the worktree
+# dir on `add` and removes it on `remove`, so cleanup is observable without a real checkout.
+
+# Install a git stub that records argv and simulates worktree add/remove on disk.
+_stub_git() {
+  export PL_GIT_LOG="$(mktemp)"
+  cat > "$PL_TEST_BIN/git" <<'SH'
+#!/usr/bin/env bash
+echo "GIT $*" >> "$PL_GIT_LOG"
+# `worktree add --detach <path> <ref>`  → create the dir so the dispatch can cd into it
+if [ "$1" = "worktree" ] && [ "$2" = "add" ]; then mkdir -p "$4"; fi
+# `worktree remove --force <path>`       → remove it (proves cleanup ran)
+if [ "$1" = "worktree" ] && [ "$2" = "remove" ]; then rm -rf "$4"; fi
+exit 0
+SH
+  chmod +x "$PL_TEST_BIN/git"
+}
+
+@test "dispatch: worktree isolation is OFF by default (no git worktree for a writer)" {
+  _stub_git
+  fake_issues '[
+    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF "#11" "$PL_CLAUDE_LOG"                       # still dispatched (in the shared tree)
+  if grep -qF "worktree add" "$PL_GIT_LOG"; then false; fi
+  # MUTATION PROOF: default PL_WORKTREE_ISOLATION to 1 → "worktree add" appears, this fails.
+}
+
+@test "dispatch: PL_WORKTREE_ISOLATION=1 runs a mutator in its own worktree off origin/main" {
+  _stub_git
+  fake_issues '[
+    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  PL_WORKTREE_ISOLATION=1 PL_DEFAULT_BRANCH=main run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  # worktree cut from PINNED origin/main on a fresh per-issue branch — never another HEAD
+  grep -qF "worktree add" "$PL_GIT_LOG"
+  grep -qF "origin/main" "$PL_GIT_LOG"
+  grep -qF "switch -c pl/developer/issue-11" "$PL_GIT_LOG"
+  # and torn down afterward (the EXIT trap)
+  grep -qF "worktree remove" "$PL_GIT_LOG"
+  [ ! -d ".claude/persona-lab/wt/developer-11" ]
+  # MUTATION PROOF: drop make_worktree/remove_worktree → "worktree add"/"remove" absent, this fails.
+}
+
+@test "dispatch: a reader gets NO worktree even with isolation on (mutator-gated)" {
+  _stub_git
+  fake_issues '[
+    {"number":13,"title":"analysis","labels":[{"name":"state:ready"},{"name":"persona:product-analyst"}]}
+  ]'
+  PL_WORKTREE_ISOLATION=1 PL_DEFAULT_BRANCH=main run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qF "#13" "$PL_CLAUDE_LOG"                       # reader still dispatched
+  if grep -qF "worktree add" "$PL_GIT_LOG"; then false; fi
+  # MUTATION PROOF: create a worktree for every dispatch → "worktree add" appears, this fails.
+}
+
+@test "dispatch: the mutator's claude runs INSIDE the worktree (cwd = worktree)" {
+  _stub_git
+  export PL_PWD_LOG="$(mktemp)"
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+pwd >> "$PL_PWD_LOG"
+printf '{"result":"{\\"record_type\\":\\"DELIVERED\\",\\"body\\":\\"done\\"}"}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":11,"title":"ready dev","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  PL_WORKTREE_ISOLATION=1 PL_DEFAULT_BRANCH=main run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  cwd="$(tail -1 "$PL_PWD_LOG")"; rm -f "$PL_PWD_LOG"
+  case "$cwd" in */.claude/persona-lab/wt/developer-11) ;; *) false;; esac
+  # MUTATION PROOF: run claude in the shared tree (ignore the workdir) → cwd is the repo root, this fails.
+}
