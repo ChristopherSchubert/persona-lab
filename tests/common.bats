@@ -134,3 +134,26 @@ That is wrong. Here is my actual review:
   run pl_extract_json <<<'no json here, just prose with a stray [bracket] and {brace'
   [ "$status" -ne 0 ]
 }
+
+# ── Universal optional bot identity (#218 — every reactor, opt-in, test-safe) ─────────────
+
+@test "pl_load_bot_identity: loads bot.env + ephemeral identity when invoked (opt-in)" {
+  local be; be="$(mktemp)"; printf 'export GH_TOKEN=tok123\n' > "$be"
+  PL_BOT_ENV="$be" BATS_VERSION= pl_load_bot_identity   # bypass the bats guard to exercise the load
+  [ "$GH_TOKEN" = "tok123" ]                            # token adopted
+  [ "$GIT_AUTHOR_NAME" = "persona-lab-gh" ]             # ephemeral git author
+  [ "$GIT_CONFIG_COUNT" = "2" ]                         # per-process credential helper injected
+  rm -f "$be"
+}
+
+@test "pl_load_bot_identity: SKIPPED under bats even if a bot.env is present (no token leak)" {
+  local be; be="$(mktemp)"; printf 'export GH_TOKEN=SHOULD_NOT_LOAD\n' > "$be"
+  PL_BOT_ENV="$be" pl_load_bot_identity                 # BATS_VERSION is set → guard skips
+  [ -z "${GH_TOKEN:-}" ]
+  rm -f "$be"
+}
+
+@test "pl_load_bot_identity: absent bot.env is a no-op (run as yourself, no error)" {
+  PL_BOT_ENV="/nonexistent/bot.env" BATS_VERSION= pl_load_bot_identity
+  [ -z "${GH_TOKEN:-}" ]
+}

@@ -162,3 +162,28 @@ _pl_json_candidates() {
 }
 
 pl_die() { echo "persona-lab: $*" >&2; exit 1; }
+
+# Optionally adopt a scoped bot identity (#218 — ALWAYS optional, NEVER enforced). Sourced by every
+# reactor via common.sh, so the bus acts as the bot whenever a bot.env exists — regardless of which
+# entrypoint you run (cycle.sh OR a bare dispatch/integrate/accept). Absent bot.env = run as your own
+# gh, no error, no setup. EPHEMERAL: scopes GH_TOKEN + git credential helper + author to THIS process
+# tree only — never your shell or global git config (no `gh auth setup-git` needed). SKIPPED under
+# bats so a test run can never load a real token. Default path is OUTSIDE the repo; override PL_BOT_ENV.
+pl_load_bot_identity() {
+  [ -n "${BATS_VERSION:-}" ] && return 0                       # never load a real bot during tests
+  local bot_env="${PL_BOT_ENV:-$HOME/.config/persona-lab/bot.env}"
+  [ -f "$bot_env" ] || return 0                                # no bot.env → run as yourself
+  . "$bot_env"
+  if [ -n "${GH_TOKEN:-}" ]; then
+    export GIT_CONFIG_COUNT=2
+    export GIT_CONFIG_KEY_0="credential.https://github.com.helper" GIT_CONFIG_VALUE_0=""
+    export GIT_CONFIG_KEY_1="credential.https://github.com.helper" \
+           GIT_CONFIG_VALUE_1='!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$GH_TOKEN"; }; f'
+    export GIT_AUTHOR_NAME="${PL_BOT_NAME:-persona-lab-gh}"     GIT_COMMITTER_NAME="${PL_BOT_NAME:-persona-lab-gh}"
+    export GIT_AUTHOR_EMAIL="${PL_BOT_EMAIL:-persona-lab-gh@users.noreply.github.com}" \
+           GIT_COMMITTER_EMAIL="${PL_BOT_EMAIL:-persona-lab-gh@users.noreply.github.com}"
+  fi
+  return 0
+}
+# Load it now, at source time — so every script that sources common.sh adopts the bot uniformly.
+pl_load_bot_identity
