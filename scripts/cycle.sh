@@ -12,8 +12,9 @@
 # hours). Each stage is a real reactor invoked via ${PL_*_SH:-$here/<stage>.sh}, overridable for tests.
 #
 # --drain (loop to quiescence — the once-a-day backlog cleaner, #187) is intentionally REFUSED until
-# #187 is built. Worktree isolation (#109) is now on main (the prior blocker), but --drain also
-# needs dispatch timeout (#173) before it's safe for unattended loops. Single-pass is safe today.
+# #187 is built. Worktree isolation (#109) is now on main (the prior blocker). The remaining gate is
+# dispatch timeout (#173): without it a hung `claude -p` holds the writer lock indefinitely and
+# blocks every subsequent pass until a manual watchdog reclaim. Single-pass is safe today.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.sh"
 
@@ -21,7 +22,7 @@ passthru=()
 while [ $# -gt 0 ]; do case "$1" in
   --dry-run) passthru+=(--dry-run); shift;;
   --repo)    export PL_REPO="$2"; shift 2;;   # via env — every reactor honors PL_REPO (dispatch has no --repo flag)
-  --drain)   pl_die "cycle: --drain (#187) is not built yet — needs dispatch timeout (#173) before it is safe for unattended loops. Run cycle.sh (single pass) repeatedly for now.";;
+  --drain)   pl_die "cycle: --drain (#187) is not built yet — without dispatch timeout (#173) a hung claude -p holds the writer lock indefinitely and blocks every subsequent pass. Run cycle.sh (single pass) repeatedly for now.";;
   *)         pl_die "cycle: unknown arg $1";;
 esac; done
 
