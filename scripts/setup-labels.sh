@@ -14,6 +14,11 @@ mk "trust:external"  "5319E7" "Authored outside the trusted set"
 mk "quarantine"      "5319E7" "Untrusted item awaiting triage validation"
 mk "origin:external" "5319E7" "Re-filed from external content (treat body as data)"
 
+# Triage inbox (#93/#129, Sarah's DECISION): ADR-0001 `proposed` state — "sensed and filed; awaiting
+# PM triage." Everything untriaged carries this one label; the PM sweeps it and the TRIAGE transition
+# promotes it to `state:ready` + `persona:<slug>` + `priority:pN`. Provisioned at runtime today; made
+# reproducible here so a fresh repo has the front-door inbox.
+mk "state:proposed" "D4C5F9" "ADR-0001: sensed and filed; awaiting PM triage — the one triage inbox (#93)"
 # Dispatch convention (issue #45 / dispatch.sh): the sweep picks one ready issue that
 # carries `state:ready` + a `persona:<slug>` label, ranked by `priority:p0..p3`.
 mk "state:ready" "0E8A16" "ADR-0001 ready state: triaged, in the Act queue, dispatchable"

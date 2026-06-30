@@ -64,6 +64,14 @@ teardown() {
   # MUTATION PROOF: drop the queue.sh file call → "issue create" absent, this fails.
 }
 
+@test "audit-sweep: every filed finding is tagged state:proposed for PM triage (#93/#129)" {
+  run scripts/audit-sweep.sh technical-writer
+  [ "$status" -eq 0 ]
+  grep -qF "issue create" "$PL_GH_LOG"
+  grep -qF "add-label state:proposed" "$PL_GH_LOG"   # enters Sarah's triage inbox automatically
+  # MUTATION PROOF: drop the state:proposed label call in audit-sweep.sh → this grep fails.
+}
+
 @test "audit-sweep: a finding whose title already exists is skipped (dedup, no refile)" {
   printf '[{"title":"Doc drift in README"}]' > "$PL_FAKE_ISSUES"
   run scripts/audit-sweep.sh technical-writer

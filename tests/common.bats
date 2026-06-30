@@ -27,6 +27,25 @@ setup() { source "${BATS_TEST_DIRNAME}/../scripts/lib/common.sh"; }
   grep -qF "badge/VERIFICATION-64748b" <<<"$output" || false
 }
 
+@test "pl_envelope: the human identity renders a clean, non-AI envelope (#93/#129)" {
+  # Sarah's convention (#93): non-persona/founder-origin issues file via `--persona human`.
+  run pl_envelope "human" "" ASSESSMENT "founder-origin note"
+  [ "$status" -eq 0 ]
+  grep -qF "avatars/human/human-64.png" <<<"$output"   # human glyph, not a 404 path
+  grep -qF "**Human**" <<<"$output"                      # capitalized display name, not lowercase "human"
+  if grep -qF '`AI`' <<<"$output"; then false; fi        # the human is NOT an AI session (docs/personas/human.md)
+  grep -qF '`Human`' <<<"$output"                         # carries the Human flag instead
+  grep -qF "Product authority" <<<"$output"               # default role when tier is empty
+  # MUTATION PROOF: remove the human branch in pl_envelope → `AI` reappears + name stays lowercase, this fails.
+}
+
+@test "pl_envelope: a real persona still carries the AI flag (human branch is additive)" {
+  run pl_envelope "Doug" "repo · Developer" ASSESSMENT "x"
+  [ "$status" -eq 0 ]
+  grep -qF '`AI`' <<<"$output"
+  if grep -qF '`Human`' <<<"$output"; then false; fi
+}
+
 @test "pl_envelope: FEEDBACK / ASK / REPLY are known record types (non-default color)" {
   run pl_envelope "Doug" "repo · Developer" FEEDBACK "calibration"
   [ "$status" -eq 0 ]

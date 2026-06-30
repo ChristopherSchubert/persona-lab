@@ -66,10 +66,19 @@ pl_runs_dir() { echo "${PL_RUNS_DIR:-${PL_RUNS:-$(pl_config_dir)/runs}}"; }
 # bus and PR surfaces render identically. tier may be "Tier · Role" — only the Role shows.
 pl_envelope() { # persona tier type body
   local persona="$1" tier="$2" rtype="$3" body="$4"
-  local slug avatar role color
+  local slug avatar role color flag
   slug="$(printf '%s' "$persona" | tr '[:upper:]' '[:lower:]' | sed 's/é/e/g' | tr -d ' ')"
   avatar="https://raw.githubusercontent.com/ChristopherSchubert/persona-lab/main/assets/avatars/${slug}/${slug}-64.png"
   role="${tier#* · }"; [ "$role" = "$tier" ] && role="$tier"
+  flag='AI'
+  # The human (founder / product authority) is NOT an AI session (docs/personas/human.md). Sarah's
+  # convention (#93) files non-persona/founder-origin issues via `--persona human`. Render it cleanly:
+  # capitalized name, a `Human` flag (never the AI flag), and a default authority role when none given.
+  # The `human` glyph lives at assets/avatars/human/ so the existing avatar path renders (no 404).
+  if [ "$slug" = "human" ]; then
+    persona="Human"; flag="Human"
+    [ -z "$role" ] && role="Product authority"
+  fi
   case "$rtype" in
     PROPOSAL|ROUTING)             color=8b5cf6 ;;
     DECISION)                     color=2563eb ;;
@@ -84,8 +93,8 @@ pl_envelope() { # persona tier type body
     *)                            color=64748b ;;
   esac
   # Approved envelope: single-line float (img + name + badge), then `AI` · role. No <br clear>, no footer.
-  printf '<img src="%s" width="44" align="left"> **%s** <img src="https://img.shields.io/badge/%s-%s?style=flat-square" height="16" align="texttop">\n`AI` · %s\n\n%s\n' \
-    "$avatar" "$persona" "$rtype" "$color" "$role" "$body"
+  printf '<img src="%s" width="44" align="left"> **%s** <img src="https://img.shields.io/badge/%s-%s?style=flat-square" height="16" align="texttop">\n`%s` · %s\n\n%s\n' \
+    "$avatar" "$persona" "$rtype" "$color" "$flag" "$role" "$body"
 }
 
 # Extract one JSON value (object or array) from a persona's result text. Single source of truth —
