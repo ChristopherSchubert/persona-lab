@@ -101,7 +101,7 @@ setup() { export PL_RUNS="$(mktemp -d)/runs"; }
 @test "runlog: append prints a run_id on stdout" {
   run scripts/runlog.sh append --persona Ben --repo finances --trigger summon --outcome pending
   [ "$status" -eq 0 ]
-  [[ "$output" =~ ^run- ]]
+  [[ "$output" =~ ^run-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$ ]]
 }
 
 @test "runlog: append writes run_id field to the NDJSON record" {
@@ -167,4 +167,9 @@ setup() { export PL_RUNS="$(mktemp -d)/runs"; }
   echo "$line" | jq -e '.outcome == "acted"'
   echo "$line" | jq -e '.cost_tokens == 42'
   # MUTATION PROOF: remove the multi-file search loop → update exits non-zero, this fails.
+}
+
+@test "runlog: update without --id exits non-zero" {
+  run scripts/runlog.sh update --outcome foo
+  [ "$status" -ne 0 ]
 }
