@@ -241,11 +241,12 @@ _extract_json() { pl_extract_json; }
 # one record as JSON; the harness (which has the shell) posts it under the persona envelope. This
 # also rescues reader output, which the background dispatch would otherwise drop to /dev/null.
 dispatch_one() {
-  local issue_number="$1" persona="$2" agent="agents/$2.md" outcome="failed"
+  local issue_number="$1" persona="$2" agent="agents/$2.md" outcome="failed" workdir="${3:-}"
   # Capacity enforced at the invocation: the agent file is the system prompt, and --allowedTools
   # comes from its `tools:` frontmatter (capacity-derived). In -p mode any tool not listed is
   # denied — so a reads-capacity persona cannot Edit/Write *and cannot run a shell to post*.
   local allowed name role model model_args
+  local run_pwd="${workdir:-.}"
   allowed="$(awk -F': ' '/^tools:/{gsub(/, */," ",$2); print $2; exit}' "$agent")"
   [ -n "$allowed" ] || pl_die "dispatch: no 'tools:' frontmatter in $agent"
   name="$("$here/assign-names.sh" "$persona" 2>/dev/null || echo "$persona")"   # slug -> display name (envelope + avatar)
@@ -261,7 +262,7 @@ dispatch_one() {
 
   echo "${PL_C_HEAD}dispatch: -> #${issue_number} '${persona}' (${name} · ${role}) [allowedTools: ${allowed}${model:+ model: $model}]${PL_C_RST}" >&2
   local raw result record rtype body pr verdict url=""
-  if raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed --output-format json 2>/dev/null)"; then
+  if raw="$(cd "$run_pwd" && "$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed --output-format json 2>/dev/null)"; then
     result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null)"
     [ -n "$result" ] || result="$raw"        # tolerate non-envelope output (stubs / --output-format text)
     record="$(printf '%s' "$result" | _extract_json || true)"
@@ -340,6 +341,31 @@ _count_failures() {
   printf '%s' "${c:-0}"
 }
 
+# Per-dispatch git worktree isolation (#109): each MUTATOR runs in its own ephemeral worktree
+# cut from origin/<default>, off by default (PL_WORKTREE_ISOLATION=1 to enable).
+worktree_isolation="${PL_WORKTREE_ISOLATION:-0}"
+wt_root="${PL_WT_ROOT:-.claude/persona-lab/wt}"
+default_branch="${PL_DEFAULT_BRANCH:-$(git remote show origin 2>/dev/null | awk '/HEAD branch/{print $NF}')}"
+default_branch="${default_branch:-main}"
+
+make_worktree() {
+  local persona="$1" num="$2" wt branch
+  branch="pl/${persona}/issue-${num}"
+  wt="${wt_root}/${persona}-${num}"
+  git worktree remove --force "$wt" >/dev/null 2>&1 || true
+  git fetch --quiet origin "$default_branch" >/dev/null 2>&1 || true
+  git worktree add --detach "$wt" "origin/${default_branch}" >/dev/null 2>&1 \
+    || pl_die "worktree: failed to add '$wt' at origin/${default_branch}"
+  git -C "$wt" switch -c "$branch" >/dev/null 2>&1 \
+    || git -C "$wt" switch "$branch" >/dev/null 2>&1 \
+    || pl_die "worktree: failed to create branch '$branch' in '$wt'"
+  printf '%s' "$wt"
+}
+remove_worktree() {
+  local wt="$1"; [ -n "$wt" ] || return 0
+  git worktree remove --force "$wt" >/dev/null 2>&1 || true
+}
+
 # Readers first, concurrently, with NO writer lock. Each background job runs with its own
 # stdout/stderr closed off the parent's inherited fds so it doesn't keep the cycle's caller
 # pipe open past its work; the explicit `wait` below is the sole completion barrier.
@@ -352,14 +378,25 @@ for line in ${reader_lines[@]+"${reader_lines[@]}"}; do
 done
 
 # Writer second, foreground, serialized behind the writer lock (at most one per cycle).
+# When isolation is on, it ALSO runs in its own ephemeral worktree; the EXIT trap releases
+# the lock AND tears the worktree down, in that order, even on a crash.
 locked=0
-release_lock() { [ "$locked" -eq 1 ] && "$LOCK_SH" release --repo "$repo" >/dev/null 2>&1 || true; }
-trap release_lock EXIT
+mutator_wt=""
+cleanup() {
+  remove_worktree "$mutator_wt"
+  [ "$locked" -eq 1 ] && "$LOCK_SH" release --repo "$repo" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
 if [ -n "$writer_line" ]; then
   wn="${writer_line%%$'\t'*}"; wp="${writer_line#*$'\t'}"
   "$LOCK_SH" claim --repo "$repo" --holder "$wp" >/dev/null
   locked=1
-  dispatch_one "$wn" "$wp"
+  if [ "$worktree_isolation" = "1" ]; then
+    mutator_wt="$(make_worktree "$wp" "$wn")"
+    dispatch_one "$wn" "$wp" "$mutator_wt"
+  else
+    dispatch_one "$wn" "$wp"
+  fi
 fi
 
 # Wait for all background readers so the run-log is complete before the next cycle fires.

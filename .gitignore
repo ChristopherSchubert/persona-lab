@@ -1,1 +1,4 @@
 activity.html
+# Per-dispatch ephemeral git worktrees (#109): cut from origin/<default>, torn down in the
+# EXIT trap; any leak is swept by `watchdog.sh prune-worktrees`. Never tracked.
+.claude/persona-lab/wt/

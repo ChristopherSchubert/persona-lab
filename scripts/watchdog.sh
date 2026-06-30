@@ -2,8 +2,9 @@
 # watchdog.sh — orphaned-state detection + recovery
 #
 # Usage:
-#   watchdog.sh scan          [--grace-min N]   # stale pending wakes (run-log)
-#   watchdog.sh reclaim-locks [--grace-min N]   # orphaned writer locks (issue #8)
+#   watchdog.sh scan            [--grace-min N]             # stale pending wakes (run-log)
+#   watchdog.sh reclaim-locks   [--grace-min N]             # orphaned writer locks (issue #8)
+#   watchdog.sh prune-worktrees [--grace-min N] [--wt-root] # leaked dispatch worktrees (#109)
 #
 # scan: scans run-log NDJSON for outcome=="pending" records older than N minutes
 #   (default 30). A stale pending indicates an orchestrator crash that left a wake
@@ -31,7 +32,31 @@ LOCK_SH="${PL_LOCK_SH:-$here/lock.sh}"
 
 # ── arg parsing ──────────────────────────────────────────────────────────────
 subcmd="${1:-}"; shift || true
-case "$subcmd" in scan|reclaim-locks) ;; *) pl_die "usage: watchdog.sh <scan|reclaim-locks> [--grace-min N]";; esac
+# prune-worktrees: sweep leaked per-dispatch worktrees (#109). A hard-killed dispatch
+# never runs its EXIT trap, so its ephemeral worktree is left behind. Only worktrees
+# OLDER than the grace window are removed so a still-running dispatch is never yanked.
+if [ "$subcmd" = "prune-worktrees" ]; then
+  grace_min=30
+  wt_root="${PL_WT_ROOT:-.claude/persona-lab/wt}"
+  while [ $# -gt 0 ]; do case "$1" in
+    --grace-min) grace_min="$2"; shift 2;;
+    --wt-root)   wt_root="$2"; shift 2;;
+    *) pl_die "unknown arg: $1";;
+  esac; done
+  git worktree prune >/dev/null 2>&1 || true
+  pruned=0
+  if [ -d "$wt_root" ]; then
+    while IFS= read -r -d '' d; do
+      git worktree remove --force "$d" >/dev/null 2>&1 || rm -rf "$d"
+      printf 'watchdog: pruned leaked worktree %s\n' "$d"
+      pruned=$((pruned + 1))
+    done < <(find "$wt_root" -mindepth 1 -maxdepth 1 -type d -mmin +"$grace_min" -print0 2>/dev/null)
+  fi
+  [ "$pruned" -eq 0 ] && printf 'watchdog: no leaked worktrees to prune (grace=%s min)\n' "$grace_min"
+  exit 0
+fi
+
+case "$subcmd" in scan|reclaim-locks) ;; *) pl_die "usage: watchdog.sh <scan|reclaim-locks|prune-worktrees> [--grace-min N]";; esac
 
 grace_min=30
 while [ $# -gt 0 ]; do case "$1" in
