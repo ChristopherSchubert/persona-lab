@@ -25,6 +25,18 @@ while [ $# -gt 0 ]; do case "$1" in
   *)         pl_die "cycle: unknown arg $1";;
 esac; done
 
+# OPTIONAL bot identity (#218 — always optional, never enforced). If a bot.env exists, source it so
+# the bus acts as a scoped bot (GH_TOKEN) instead of your own gh login. Default path is OUTSIDE the
+# repo (no commit risk); override with PL_BOT_ENV. ABSENT IS THE NORMAL PATH — you run as yourself,
+# no error. This never decides identity for you; it only loads what you opted into.
+bot_env="${PL_BOT_ENV:-$HOME/.config/persona-lab/bot.env}"
+if [ -f "$bot_env" ]; then
+  . "$bot_env"
+  echo "${PL_C_HEAD}cycle: bot identity loaded from ${bot_env}${PL_C_RST}" >&2
+else
+  echo "${PL_C_DIM}cycle: no bot.env — running as your own gh identity (set PL_BOT_ENV to opt into a bot)${PL_C_RST}" >&2
+fi
+
 TRIAGE_SH="${PL_TRIAGE_SH:-$here/triage-reviews.sh}"
 DISPATCH_SH="${PL_DISPATCH_SH:-$here/dispatch.sh}"
 INTEGRATE_SH="${PL_INTEGRATE_SH:-$here/integrate.sh}"

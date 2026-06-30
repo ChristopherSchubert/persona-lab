@@ -4,6 +4,7 @@
 setup() {
   export PL_TEST_BIN="$(mktemp -d)"
   export PL_ORDER_LOG="$(mktemp)"
+  export PL_BOT_ENV="$PL_TEST_BIN/no-bot.env"  # default: no bot identity in tests
   for s in triage dispatch integrate accept; do
     cat > "$PL_TEST_BIN/$s" <<SH
 #!/usr/bin/env bash
@@ -60,4 +61,31 @@ SH
   run scripts/cycle.sh --repo acme/test-repo
   [ "$status" -eq 0 ]
   grep -qF "PL_REPO=acme/test-repo" "$PL_ORDER_LOG"
+}
+
+# ── Optional bot identity (#218 — always optional, never enforced) ────────────────────────
+
+@test "cycle: with no bot.env, runs as your own identity (no error, normal pass)" {
+  # PL_BOT_ENV (set in setup) points at a nonexistent file → the absent path.
+  run scripts/cycle.sh
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qiE "no bot.env|your own"
+  # all stages still ran
+  [ "$(awk '{print $1}' "$PL_ORDER_LOG" | tr '\n' ' ')" = "triage dispatch integrate accept " ]
+}
+
+@test "cycle: sources PL_BOT_ENV when present (opt-in bot identity)" {
+  local be="$PL_TEST_BIN/bot.env"
+  printf 'export PL_BOT_MARK=loaded\n' > "$be"
+  export PL_BOT_ENV="$be"
+  # a stub stage echoes the sourced marker so we can prove it was loaded into the env
+  cat > "$PL_DISPATCH_SH" <<'SH'
+#!/usr/bin/env bash
+echo "dispatch PL_BOT_MARK=$PL_BOT_MARK" >> "$PL_ORDER_LOG"
+SH
+  chmod +x "$PL_DISPATCH_SH"
+  run scripts/cycle.sh
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qiF "bot identity loaded"
+  grep -qF "PL_BOT_MARK=loaded" "$PL_ORDER_LOG"
 }
