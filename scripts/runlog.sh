@@ -31,7 +31,7 @@ if [ "$subcmd" = "append" ]; then
   esac; done
 
   # Generate a unique run_id: timestamp + 8 random hex chars.
-  run_id="run-$(date -u +%Y%m%dT%H%M%SZ)-$(LC_ALL=C tr -dc 'a-f0-9' </dev/urandom 2>/dev/null | head -c8 || printf '%08x' "$$")"
+  run_id="run-$(date -u +%Y%m%dT%H%M%SZ)-$(set +o pipefail; LC_ALL=C tr -dc 'a-f0-9' </dev/urandom 2>/dev/null | head -c8)"
 
   # Build the record with required fields; add optional fields only when non-empty.
   # issue_number is stored as a number (argjson); all others are strings.
@@ -79,7 +79,7 @@ else  # update
 
   # Find the NDJSON file containing this run_id (search newest-first: today → older).
   target_file=""
-  for f in $(ls -t "$runs"/*.ndjson 2>/dev/null); do
+  for f in $(find "$runs" -maxdepth 1 -name '*.ndjson' -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null); do
     [ -f "$f" ] || continue
     if jq -e --arg id "$run_id" 'select(.run_id == $id)' "$f" >/dev/null 2>&1; then
       target_file="$f"
@@ -90,6 +90,7 @@ else  # update
 
   # Atomically rewrite the file, merging new fields into the matching record.
   tmp="$(mktemp "${target_file}.XXXXXX")"
+  trap 'rm -f "$tmp"' EXIT
   jq -c \
     --arg id "$run_id" \
     --arg outcome "$outcome" \
