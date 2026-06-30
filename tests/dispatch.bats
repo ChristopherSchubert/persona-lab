@@ -753,18 +753,20 @@ SH
 
   run scripts/dispatch.sh
   [ "$status" -eq 0 ]
-  # Verdict routed to the PR as a real review (review.sh -> gh pr review 190 --approve).
-  grep -qE "pr review.*190.*--approve" "$PL_GH_LOG"
+  # #216: verdict posts to the PR as a COMMENT (never native --approve, which fails on own PR);
+  # the gate is the LABEL applied from the verdict.
+  grep -qE "pr review.*190.*--comment" "$PL_GH_LOG"
+  if grep -qE "pr review.*190.*--approve" "$PL_GH_LOG"; then false; fi
+  grep -qE "pr edit.*190.*--add-label gate:eng-approved" "$PL_GH_LOG"
   # And NOT buried as an issue comment on the review issue.
   if grep -qE "issue comment.*192" "$PL_GH_LOG"; then false; fi
   # The review TASK must advance off state:ready so it doesn't re-dispatch every cycle (#132 treadmill).
   grep -qF "state:in_review" "$PL_GH_LOG"
   grep -qF -- "--remove-label state:ready" "$PL_GH_LOG"
-  # MUTATION PROOF: route REVIEW-with-pr back through queue.sh comment → "pr review" absent, this fails;
-  # drop advance_state from the PR-review success path → "state:in_review" absent, this fails.
+  # MUTATION PROOF: use native --approve → fails on own PR (#216); drop the gate label → integrate can't see the approval.
 }
 
-@test "dispatch: REVIEW record naming a pr maps request-changes verdict to gh pr review --request-changes" {
+@test "dispatch: a request-changes verdict posts a comment and applies the blocking gate label" {
   fake_issues '[
     {"number":192,"title":"Greg: code-review PR #190","labels":[{"name":"state:ready"},{"name":"persona:lead-engineer"},{"name":"priority:p0"}]}
   ]'
@@ -777,7 +779,9 @@ SH
 
   run scripts/dispatch.sh
   [ "$status" -eq 0 ]
-  grep -qE "pr review.*190.*--request-changes" "$PL_GH_LOG"
+  grep -qE "pr review.*190.*--comment" "$PL_GH_LOG"
+  if grep -qE "pr review.*190.*--request-changes" "$PL_GH_LOG"; then false; fi
+  grep -qE "pr edit.*190.*--add-label gate:changes-requested" "$PL_GH_LOG"
   if grep -qE "issue comment.*192" "$PL_GH_LOG"; then false; fi
 }
 
@@ -894,4 +898,40 @@ SH
   [ "$status" -eq 0 ]
   # the persona is told to stamp the trailer naming THIS issue, so a merged PR can be PM-accepted
   grep -qF "Resolves-Issue: #11" "$PL_CLAUDE_LOG"
+}
+
+# ── #217: forward progress on failure — a repeatedly-failing task is parked, not looped forever ──
+
+@test "dispatch: an issue that has failed PL_MAX_FAILURES times is parked off state:ready" {
+  fake_issues '[
+    {"number":11,"title":"doomed","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  # seed two prior failures for #11 in the run-log; this run's failure makes three
+  mkdir -p "$PL_RUNS_DIR"
+  printf '%s\n%s\n' '{"issue_number":11,"outcome":"failed"}' '{"issue_number":11,"outcome":"failed"}' > "$PL_RUNS_DIR/seed.ndjson"
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"I cannot produce a record."}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -qE "issue edit.*11.*--remove-label state:ready" "$PL_GH_LOG"
+  # MUTATION PROOF: drop the park-on-failure guard → no "issue edit … --remove-label state:ready", this fails.
+}
+
+@test "dispatch: an issue failing for the first time is NOT parked (under the threshold)" {
+  fake_issues '[
+    {"number":11,"title":"flaky","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+printf '{"result":"I cannot produce a record."}'
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  if grep -qE "issue edit.*11.*--remove-label state:ready" "$PL_GH_LOG"; then false; fi
 }

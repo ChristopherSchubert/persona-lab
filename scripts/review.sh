@@ -39,9 +39,9 @@ if [ -n "$event" ]; then
     request-changes) eventflag="--request-changes" ;;
     *) pl_die "review: invalid --event '$event' (must be approve|comment|request-changes)";;
   esac
-  url="$(gh pr review ${repoflag[@]+"${repoflag[@]}"} "$pr" "$eventflag" --body "$enveloped")"
+  url="$(gh pr review ${repoflag[@]+"${repoflag[@]}"} "$pr" "$eventflag" --body "$enveloped" </dev/null)"
 else
-  url="$(gh pr comment ${repoflag[@]+"${repoflag[@]}"} "$pr" --body "$enveloped")"
+  url="$(gh pr comment ${repoflag[@]+"${repoflag[@]}"} "$pr" --body "$enveloped" </dev/null)"
 fi
 printf '%s\n' "$url"
 

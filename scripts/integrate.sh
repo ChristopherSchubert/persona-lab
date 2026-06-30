@@ -78,8 +78,8 @@ for num in $nums; do
 
   # Gated-autonomous merge: squash + delete branch, NO --admin, NO force. RE is the merger; the
   # eng/qa gate labels prove an INDEPENDENT reviewer approved (the no-self-merge guarantee).
-  if gh pr merge "$num" --repo "$ghrepo" --squash --delete-branch >/dev/null 2>&1; then
-    gh pr edit "$num" --repo "$ghrepo" --add-label "state:merged" >/dev/null 2>&1 || true
+  if gh pr merge "$num" --repo "$ghrepo" --squash --delete-branch </dev/null >/dev/null 2>&1; then
+    gh pr edit "$num" --repo "$ghrepo" --add-label "state:merged" </dev/null >/dev/null 2>&1 || true
     "$here/runlog.sh" append --persona "release-engineer" --repo "$repo" --trigger "integrate" \
       --outcome "merged" --record-type "integrate" --action "merge" --issue-number "$num" 2>/dev/null || true
     echo "${PL_C_OK}integrate: merged PR #${num} (squash) -> labelled state:merged, handed to PM for acceptance close${PL_C_RST}" >&2

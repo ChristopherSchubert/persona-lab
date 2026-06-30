@@ -45,9 +45,9 @@ for pr in $nums; do
   acc_body="$(printf 'Accepted. PR #%s merged to `main` through the gated pipeline (independent Lead Engineer + QA approval — see the PR reviews). Closing per ADR-0001: PM acceptance, citing the merge as proof, no self-close.' "$pr")"
   # PROOF FIRST: post the enveloped acceptance record. Only if it lands do we close the issue.
   if "$here/queue.sh" comment "$issue" --persona "$name" --tier "Product Manager" --type ASSESSMENT --body "$acc_body" --repo "$ghrepo" >/dev/null 2>&1; then
-    gh issue close "$issue" --repo "$ghrepo" --reason completed >/dev/null 2>&1 || true
-    gh pr edit "$pr" --repo "$ghrepo" --add-label "state:accepted"    >/dev/null 2>&1 || true
-    gh pr edit "$pr" --repo "$ghrepo" --remove-label "state:merged"   >/dev/null 2>&1 || true
+    gh issue close "$issue" --repo "$ghrepo" --reason completed </dev/null >/dev/null 2>&1 || true
+    gh pr edit "$pr" --repo "$ghrepo" --add-label "state:accepted" </dev/null >/dev/null 2>&1 || true
+    gh pr edit "$pr" --repo "$ghrepo" --remove-label "state:merged" </dev/null >/dev/null 2>&1 || true
     "$here/runlog.sh" append --persona "product-manager" --repo "$repo" --trigger "accept" \
       --outcome "accepted" --record-type "accept" --action "close" --issue-number "$issue" 2>/dev/null || true
     echo "${PL_C_OK}accept: #${issue} accepted & closed (PR #${pr}) → state:accepted${PL_C_RST}" >&2
