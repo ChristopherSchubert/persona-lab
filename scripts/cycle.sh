@@ -32,7 +32,20 @@ esac; done
 bot_env="${PL_BOT_ENV:-$HOME/.config/persona-lab/bot.env}"
 if [ -f "$bot_env" ]; then
   . "$bot_env"
-  echo "${PL_C_HEAD}cycle: bot identity loaded from ${bot_env}${PL_C_RST}" >&2
+  # Make the bot identity fully EPHEMERAL — scoped to THIS process tree, never your shell or global
+  # git config (no `gh auth setup-git` required). gh already honors GH_TOKEN; for git push over HTTPS
+  # we inject a per-process credential helper + author identity via GIT_CONFIG_* (git 2.31+). When
+  # the script exits, your CLI is untouched.
+  if [ -n "${GH_TOKEN:-}" ]; then
+    export GIT_CONFIG_COUNT=2
+    export GIT_CONFIG_KEY_0="credential.https://github.com.helper" GIT_CONFIG_VALUE_0=""   # reset inherited helpers
+    export GIT_CONFIG_KEY_1="credential.https://github.com.helper" \
+           GIT_CONFIG_VALUE_1='!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$GH_TOKEN"; }; f'
+    export GIT_AUTHOR_NAME="${PL_BOT_NAME:-persona-lab-gh}"     GIT_COMMITTER_NAME="${PL_BOT_NAME:-persona-lab-gh}"
+    export GIT_AUTHOR_EMAIL="${PL_BOT_EMAIL:-persona-lab-gh@users.noreply.github.com}" \
+           GIT_COMMITTER_EMAIL="${PL_BOT_EMAIL:-persona-lab-gh@users.noreply.github.com}"
+  fi
+  echo "${PL_C_HEAD}cycle: bot identity loaded from ${bot_env} (ephemeral — your shell/global git config untouched)${PL_C_RST}" >&2
 else
   echo "${PL_C_DIM}cycle: no bot.env — running as your own gh identity (set PL_BOT_ENV to opt into a bot)${PL_C_RST}" >&2
 fi

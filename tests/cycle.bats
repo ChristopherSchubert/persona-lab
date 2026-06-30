@@ -74,18 +74,20 @@ SH
   [ "$(awk '{print $1}' "$PL_ORDER_LOG" | tr '\n' ' ')" = "triage dispatch integrate accept " ]
 }
 
-@test "cycle: sources PL_BOT_ENV when present (opt-in bot identity)" {
+@test "cycle: sources PL_BOT_ENV when present, sets ephemeral bot identity (opt-in)" {
   local be="$PL_TEST_BIN/bot.env"
-  printf 'export PL_BOT_MARK=loaded\n' > "$be"
+  printf 'export GH_TOKEN=tok123\n' > "$be"
   export PL_BOT_ENV="$be"
-  # a stub stage echoes the sourced marker so we can prove it was loaded into the env
+  # a stub stage echoes the env the script set, proving the bot identity is scoped into the run
   cat > "$PL_DISPATCH_SH" <<'SH'
 #!/usr/bin/env bash
-echo "dispatch PL_BOT_MARK=$PL_BOT_MARK" >> "$PL_ORDER_LOG"
+echo "dispatch GH_TOKEN=$GH_TOKEN AUTHOR=$GIT_AUTHOR_NAME CFGN=$GIT_CONFIG_COUNT" >> "$PL_ORDER_LOG"
 SH
   chmod +x "$PL_DISPATCH_SH"
   run scripts/cycle.sh
   [ "$status" -eq 0 ]
   echo "$output" | grep -qiF "bot identity loaded"
-  grep -qF "PL_BOT_MARK=loaded" "$PL_ORDER_LOG"
+  grep -qF "GH_TOKEN=tok123" "$PL_ORDER_LOG"           # token reached the reactors
+  grep -qF "AUTHOR=persona-lab-gh" "$PL_ORDER_LOG"     # ephemeral git author identity set
+  grep -qF "CFGN=2" "$PL_ORDER_LOG"                    # per-process git credential helper injected
 }
