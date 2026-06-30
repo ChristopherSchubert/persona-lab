@@ -36,11 +36,13 @@ has_label() { printf '%s\n' "$2" | grep -qxF "$1"; }
 review_one() {
   local pr="$1" slug="$2" diff="$3" agent="agents/$2.md"
   [ -f "$agent" ] || { echo "triage-reviews: no agent file $agent — skipping ${slug}" >&2; return 0; }
-  local allowed name role glabel
+  local allowed name role glabel model model_args
   allowed="$(awk -F': ' '/^tools:/{gsub(/, */," ",$2); print $2; exit}' "$agent")"
   name="$("$here/assign-names.sh" "$slug" 2>/dev/null || echo "$slug")"
   role="$(awk -F' — ' '/^# /{t=$1; sub(/^# +/,"",t); print t; exit}' "$agent")"; [ -n "$role" ] || role="$slug"
   glabel="$(_gate_label_for "$slug")"
+  model="$(pl_agent_model "$agent")"
+  model_args="${model:+--model $model}"
 
   local prompt
   prompt="$(printf 'You are reviewing pull request #%s on repo %s as the gate reviewer for your role. The diff follows. Do a real review — find what is wrong; do not rubber-stamp.\n\n----- PR #%s DIFF -----\n%s\n----- END DIFF -----\n\nYou do NOT post anything — the harness posts your verdict as a PR comment and sets the gate label from it. End your turn by emitting ONLY this FINAL ```json fenced block, nothing after it:\n```json\n{"record_type":"REVIEW","pr":%s,"verdict":"<approve|request-changes|comment>","body":"<your review as markdown, citing specifics>"}\n```\n' "$pr" "$repo" "$pr" "$diff" "$pr")"
@@ -52,7 +54,7 @@ review_one() {
   fi
 
   local raw result rec verdict body
-  raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed --output-format json 2>/dev/null || true)"
+  raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed --output-format json 2>/dev/null || true)"
   result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null || true)"; [ -n "$result" ] || result="$raw"
   rec="$(printf '%s' "$result" | pl_extract_json 2>/dev/null || true)"
   verdict="$(printf '%s' "$rec" | jq -r '.verdict // empty' 2>/dev/null || true)"

@@ -1,6 +1,7 @@
 ---
 name: delivery-manager
 tools: Read, Edit, Write, Grep, Glob
+model: claude-sonnet-4-6
 ---
 
 # Delivery Manager — RACI, handoff integrity, execution discipline

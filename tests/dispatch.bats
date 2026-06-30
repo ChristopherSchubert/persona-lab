@@ -43,6 +43,12 @@ SH
   export PL_REPO="persona-lab"
 }
 teardown() {
+  # Restore any agent files mutated by model-selection tests (guaranteed even on assertion failure).
+  if [ -n "${_AGENT_RESTORE_FILE:-}" ] && [ -n "${_AGENT_RESTORE_TARGET:-}" ]; then
+    cp "$_AGENT_RESTORE_FILE" "$_AGENT_RESTORE_TARGET"
+    rm -f "$_AGENT_RESTORE_FILE"
+    unset _AGENT_RESTORE_FILE _AGENT_RESTORE_TARGET
+  fi
   rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_CLAUDE_LOG" "$PL_LOCK_LOG" \
          "$PL_FAKE_ISSUES" "${PL_RUNS_DIR%/runs}"
 }
@@ -934,4 +940,37 @@ SH
   run scripts/dispatch.sh
   [ "$status" -eq 0 ]
   if grep -qE "issue edit.*11.*--remove-label state:ready" "$PL_GH_LOG"; then false; fi
+}
+
+# ── per-persona model selection (#234) ────────────────────────────────────────────────────────────
+
+@test "dispatch: passes --model from agent frontmatter to claude -p" {
+  # Save original into a temp file; teardown() restores it even if assertions fail.
+  _AGENT_RESTORE_TARGET="agents/developer.md"
+  _AGENT_RESTORE_FILE="$(mktemp)"
+  cp "$_AGENT_RESTORE_TARGET" "$_AGENT_RESTORE_FILE"
+  sed -i '' 's/^model:.*/model: claude-test-model-sentinel/' agents/developer.md
+
+  fake_issues '[
+    {"number":11,"title":"test model passthrough","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -q "CLAUDE" "$PL_CLAUDE_LOG"
+  grep -qF -- "--model claude-test-model-sentinel" "$PL_CLAUDE_LOG"
+}
+
+@test "dispatch: omits --model flag when agent has no model: frontmatter" {
+  # Save original into a temp file; teardown() restores it even if assertions fail.
+  _AGENT_RESTORE_TARGET="agents/lead-engineer.md"
+  _AGENT_RESTORE_FILE="$(mktemp)"
+  cp "$_AGENT_RESTORE_TARGET" "$_AGENT_RESTORE_FILE"
+  sed -i '' '/^model:/d' agents/lead-engineer.md
+
+  fake_issues '[
+    {"number":11,"title":"no model field","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:lead-engineer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  if grep -q -- "--model" "$PL_CLAUDE_LOG"; then false; fi
 }

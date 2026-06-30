@@ -1,6 +1,7 @@
 ---
 name: security-analyst
 tools: Read, Grep, Glob, Bash
+model: claude-haiku-4-5-20251001
 ---
 
 # Security Analyst — local security review and deterministic leak scanning

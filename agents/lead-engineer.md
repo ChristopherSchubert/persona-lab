@@ -1,6 +1,7 @@
 ---
 name: lead-engineer
 tools: Read, Grep, Glob, Bash
+model: claude-sonnet-4-6
 ---
 
 # Lead Engineer — code review and engineering standards

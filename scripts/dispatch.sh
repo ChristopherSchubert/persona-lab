@@ -245,11 +245,13 @@ dispatch_one() {
   # Capacity enforced at the invocation: the agent file is the system prompt, and --allowedTools
   # comes from its `tools:` frontmatter (capacity-derived). In -p mode any tool not listed is
   # denied — so a reads-capacity persona cannot Edit/Write *and cannot run a shell to post*.
-  local allowed name role
+  local allowed name role model model_args
   allowed="$(awk -F': ' '/^tools:/{gsub(/, */," ",$2); print $2; exit}' "$agent")"
   [ -n "$allowed" ] || pl_die "dispatch: no 'tools:' frontmatter in $agent"
   name="$("$here/assign-names.sh" "$persona" 2>/dev/null || echo "$persona")"   # slug -> display name (envelope + avatar)
   role="$(awk -F' — ' '/^# /{t=$1; sub(/^# +/,"",t); print t; exit}' "$agent")" # role title from the agent H1
+  model="$(pl_agent_model "$agent")"
+  model_args="${model:+--model $model}"
 
   # Read the bus FOR the persona (it usually can't): inject the issue's title/body/comments so it
   # operates on the REAL task instead of just "issue #N" (#125).
@@ -257,9 +259,9 @@ dispatch_one() {
   local prompt
   prompt="$(printf '%s\n\n---\n\nYou are operating the issue above (#%s) on repo %s. Do ONE bounded unit of work for your role (ADR-0001), using only the tools you have been granted. Act on the issue body/discussion above. You do NOT post to the bus — the harness posts your record for you. End your turn by emitting your record as the FINAL ```json fenced code block in your message, with NOTHING after the closing fence. The block must contain exactly one JSON object (if your prose quotes any other JSON, the harness still takes only this last fenced block):\n```json\n{"record_type":"<ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY>","body":"<your record as GitHub-flavored markdown; if you changed code or opened a PR, cite it>"}\n```\nIf and only if you are REVIEWING a pull request, the JSON object in that final fenced block must instead be:\n{"record_type":"REVIEW","pr":<the PR number>,"verdict":"<approve|request-changes|comment>","body":"<your review as markdown, citing the commit>"}\nThe harness posts this as a real PR review (gh pr review) so the merge gate can see your verdict.\nIf your work opens a pull request, include the trailer line `Resolves-Issue: #%s` in the PR body (this issue) so the PM acceptance step can close this issue once the PR is merged — do NOT use a GitHub auto-close keyword (Closes/Fixes), which would bypass PM acceptance.\n' "$issue_ctx" "$issue_number" "$repo" "$issue_number")"
 
-  echo "${PL_C_HEAD}dispatch: -> #${issue_number} '${persona}' (${name} · ${role}) [allowedTools: ${allowed}]${PL_C_RST}" >&2
+  echo "${PL_C_HEAD}dispatch: -> #${issue_number} '${persona}' (${name} · ${role}) [allowedTools: ${allowed}${model:+ model: $model}]${PL_C_RST}" >&2
   local raw result record rtype body pr verdict url=""
-  if raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed --output-format json 2>/dev/null)"; then
+  if raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed --output-format json 2>/dev/null)"; then
     result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null)"
     [ -n "$result" ] || result="$raw"        # tolerate non-envelope output (stubs / --output-format text)
     record="$(printf '%s' "$result" | _extract_json || true)"

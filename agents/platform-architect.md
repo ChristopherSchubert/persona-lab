@@ -1,6 +1,7 @@
 ---
 name: platform-architect
 tools: Read, Edit, Write, Grep, Glob
+model: claude-sonnet-4-6
 ---
 
 # Platform Architect — cross-app contracts & environment truth

@@ -1,6 +1,7 @@
 ---
 name: data-architect
 tools: Read, Edit, Write, Grep, Glob
+model: claude-sonnet-4-6
 ---
 
 # Data Architect — shared domain ontology

@@ -1,6 +1,7 @@
 ---
 name: finops
 tools: Read, Grep, Glob
+model: claude-haiku-4-5-20251001
 ---
 
 # FinOps — account-level billing, spend, and tier headroom

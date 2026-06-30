@@ -1,6 +1,7 @@
 ---
 name: head-of-qa
 tools: Read, Edit, Write, Grep, Glob
+model: claude-sonnet-4-6
 ---
 
 # Head of QA — quality policy, release confidence, test strategy

@@ -76,9 +76,12 @@ _extract_json() { pl_extract_json; }
 # (one line per tool call + text), so a run isn't a silent black box; default is buffered.
 _run_claude() {
   local agent="$1" allowed="$2" prompt="$3"
+  local model model_args
+  model="$(pl_agent_model "$agent")"
+  model_args="${model:+--model $model}"
   if [ "${PL_STREAM:-0}" = "1" ]; then
     local tmp; tmp="$(mktemp)"
-    "$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed \
+    "$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed \
         --output-format stream-json --verbose 2>/dev/null | tee "$tmp" | while IFS= read -r ln; do
       printf '%s' "$ln" | jq -r --arg d "$C_DIM" --arg r "$C_RST" '
         if .type=="assistant" then (.message.content[]? |
@@ -91,7 +94,7 @@ _run_claude() {
     rm -f "$tmp"
   else
     local raw r
-    raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed --output-format json 2>/dev/null)"
+    raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed --output-format json 2>/dev/null)"
     r="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null)"
     [ -n "$r" ] && printf '%s' "$r" || printf '%s' "$raw"
   fi

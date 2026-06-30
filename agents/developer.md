@@ -1,6 +1,7 @@
 ---
 name: developer
 tools: Read, Edit, Write, Bash, Grep, Glob
+model: claude-sonnet-4-6
 ---
 
 # Developer — implements one issue end-to-end

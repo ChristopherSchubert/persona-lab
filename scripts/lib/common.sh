@@ -163,6 +163,14 @@ _pl_json_candidates() {
 
 pl_die() { echo "persona-lab: $*" >&2; exit 1; }
 
+# Read optional model: field from an agent file's frontmatter. Returns empty string if absent.
+# Handles both `model: claude-foo` and `model:claude-foo` (YAML allows no space after colon).
+# Usage: model="$(pl_agent_model agents/lead-engineer.md)"
+# Then: ${model:+--model $model} in the claude -p invocation.
+pl_agent_model() {
+  awk '/^model:/{sub(/^model:[[:space:]]*/,""); print; exit}' "${1:-/dev/null}" 2>/dev/null || true
+}
+
 # Optionally adopt a scoped bot identity (#218 — ALWAYS optional, NEVER enforced). Sourced by every
 # reactor via common.sh, so the bus acts as the bot whenever a bot.env exists — regardless of which
 # entrypoint you run (cycle.sh OR a bare dispatch/integrate/accept). Absent bot.env = run as your own
