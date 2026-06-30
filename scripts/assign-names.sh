@@ -16,6 +16,15 @@ if [[ -z "$slug" ]]; then
   pl_die "usage: assign-names.sh <persona-slug> [repo]"
 fi
 
+# The human (founder / product authority) is NOT a name-pool persona (docs/personas/human.md): it has
+# no role row in the roster, but the bus attributes non-persona/founder-origin issues to it via
+# `queue.sh file --persona human` (#93). Resolve it directly so callers that name-resolve before
+# filing don't error. Repo-independent like every identity.
+if [[ "$slug" == "human" ]]; then
+  printf 'Human\n'
+  exit 0
+fi
+
 # Map slug to the display title used in the roster table
 case "$slug" in
   developer)            title="Developer" ;;

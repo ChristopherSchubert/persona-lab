@@ -18,6 +18,11 @@
   [ "$(scripts/assign-names.sh accessibility-analyst anyrepo)" = "Nadia" ]
   [ "$(scripts/assign-names.sh privacy-analyst anyrepo)" = "Vera" ]
 }
+@test "assign-names: the human (non-persona founder) identity resolves to Human (#93/#129)" {
+  [ "$(scripts/assign-names.sh human)" = "Human" ]
+  # repo-arg tolerated, same answer — the human is repo-independent like every role
+  [ "$(scripts/assign-names.sh human anyrepo)" = "Human" ]
+}
 @test "assign-names: unknown persona fails" {
   run scripts/assign-names.sh bogus finances; [ "$status" -ne 0 ]
 }

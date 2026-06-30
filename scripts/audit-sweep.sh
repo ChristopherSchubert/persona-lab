@@ -14,9 +14,9 @@
 #
 # Access model (issue #9): personas have no shell to file issues themselves. Each persona RETURNS
 # its findings as a JSON array; the HARNESS files the NEW ones (duplicate titles are skipped) and
-# records them. Findings are filed UNROUTED — no persona: label — because choosing the owner is
-# triage's job (Sarah + the RACI), not the discoverer's. So a sweep surfaces work into the queue;
-# triage then routes it for dispatch.
+# records them. Findings are filed UNASSIGNED — no persona: label — because choosing the owner is
+# triage's job (Sarah + the RACI), not the discoverer's. They ARE tagged `state:proposed` (#93/#129)
+# so they land in the PM triage inbox automatically; the TRIAGE transition then routes for dispatch.
 #
 # Testability: the model is invoked via ${PL_CLAUDE:-claude}; tests stub it. NO real `claude` call
 # happens in tests/dev.
@@ -146,6 +146,10 @@ sweep_one() {
       url=""; continue
     fi
     num="${url##*/}"
+    # Route the finding into the PM triage inbox (#93/#129, Sarah's DECISION): every filed finding
+    # carries `state:proposed` — the one binding "untriaged, awaiting PM" signal the PM sweeps. The
+    # model's `priority:` below stays as a provisional hint, re-confirmed/overridden at TRIAGE.
+    [ -n "$num" ] && "$here/queue.sh" label "$num" --add "state:proposed" --repo "$ghrepo" >/dev/null 2>&1 || true
     case "$prio" in p0|p1|p2|p3) [ -n "$num" ] && "$here/queue.sh" label "$num" --add "priority:$prio" --repo "$ghrepo" >/dev/null 2>&1 || true;; esac
     existing_titles="$(printf '%s\n%s' "$existing_titles" "$title")"   # also dedup within this run
     filed=$((filed+1))
