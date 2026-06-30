@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
-# triage-reviews.sh — the PM review-triage pass (#149/#196): the produce→review TRIGGER.
+# triage-reviews.sh — the REVIEW pass (#215). Dispatch the gate reviewer(s) DIRECTLY against each open
+# PR that still needs review and post their verdict as a COMMENT + gate label ON THE PR. It NEVER
+# creates a "Review PR #N" tracking issue — reviews live on the PR (bus-hygiene, #196). Mirrors
+# audit-sweep: dispatch persona → get verdict JSON → harness posts it (the persona has no shell).
 #
-# When a persona opens a PR, nothing yet dispatches its reviewers (dispatch.sh selects state:ready
-# issues; a PR-opened issue sits in inert state:in_review). This pass closes that gap WITHOUT moving
-# routing off the PM: it dispatches Sarah (the PM) with the open PRs awaiting review; she routes each
-# to its gate owner(s) per Remy's RACI (code → Lead Engineer; tests/scripts → +Head of QA; visual →
-# +Head of Design). Sarah has no shell, so she RETURNS the review tasks and the harness files them
-# routed (persona:<slug> + state:ready + priority) — the normal dispatch cycle then picks them up,
-# each reviewer returns a REVIEW verdict (→ review.sh on the PR → gate label), integrate.sh merges,
-# accept.sh closes. Routing stays with the PM (CLAUDE.md), not the orchestrator.
+# Gate reviewers (the fixed code/QA gate, CLAUDE.md): Lead Engineer on EVERY PR; + Head of QA when the
+# diff touches tests/ or scripts/. Each (PR, reviewer) is reviewed at most once — deduped on the gate
+# label already being present. A PR carrying gate:changes-requested is skipped (awaiting the dev's fix).
 #
-# Run from a terminal/scheduler, never nested in a Claude session. claude is invoked via
-# ${PL_CLAUDE:-claude} (stubbed in tests); NO real model call or issue is created in tests/dev.
+# Run from a terminal/scheduler, never nested. claude is invoked via ${PL_CLAUDE:-claude} (stubbed in
+# tests); NO real model call, PR comment, or issue is made in tests/dev.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.sh"
 
@@ -26,73 +24,83 @@ esac; done
 ghrepo="${repo_override:-$(pl_gh_repo)}"
 repo="${PL_REPO:-$(pl_manifest_get repo 2>/dev/null || echo unknown)}"
 
-# The fixed review-gate owners (CLAUDE.md): code → Greg, QA → Priya, visual → Laura. The PM routes
-# WITHIN this set; the harness refuses any slug outside it (a review task can't name a non-gate owner).
-_is_gate_reviewer() { case "$1" in lead-engineer|head-of-qa|head-of-design) return 0;; *) return 1;; esac; }
+# Fixed gate: Lead Engineer always; Head of QA when the diff touches tests/ or scripts/.
+_gate_reviewers() {
+  echo "lead-engineer"
+  printf '%s\n' "$1" | grep -qE '^(tests/|scripts/)' && echo "head-of-qa" || true
+}
+_gate_label_for() { case "$1" in lead-engineer) echo "gate:eng-approved";; head-of-qa) echo "gate:qa-approved";; *) echo "";; esac; }
+has_label() { printf '%s\n' "$2" | grep -qxF "$1"; }
 
-# Open PRs still awaiting review: not yet eng-approved, not already merged/accepted.
-prs_json="$(gh pr list --repo "$ghrepo" --state open --json number,title,labels,files)"
-pending="$(printf '%s' "$prs_json" | jq -c '
-  [ .[]
-    | ([.labels[].name]) as $l
-    | select(($l|index("gate:eng-approved"))==null and ($l|index("state:merged"))==null and ($l|index("state:accepted"))==null)
-    | {number, title, files: [.files[].path]} ]')"
-count="$(printf '%s' "$pending" | jq 'length' 2>/dev/null || echo 0)"
-if [ "$count" -eq 0 ]; then echo "triage-reviews: no PRs awaiting review" >&2; exit 0; fi
+# Dispatch ONE gate reviewer against a PR and post the verdict ON THE PR (comment + gate label). No issue.
+review_one() {
+  local pr="$1" slug="$2" diff="$3" agent="agents/$2.md"
+  [ -f "$agent" ] || { echo "triage-reviews: no agent file $agent — skipping ${slug}" >&2; return 0; }
+  local allowed name role glabel
+  allowed="$(awk -F': ' '/^tools:/{gsub(/, */," ",$2); print $2; exit}' "$agent")"
+  name="$("$here/assign-names.sh" "$slug" 2>/dev/null || echo "$slug")"
+  role="$(awk -F' — ' '/^# /{t=$1; sub(/^# +/,"",t); print t; exit}' "$agent")"; [ -n "$role" ] || role="$slug"
+  glabel="$(_gate_label_for "$slug")"
 
-# Dispatch the PM (Sarah) to route the pending PRs. She returns the review tasks; the harness files them.
-agent="agents/product-manager.md"
-[ -f "$agent" ] || pl_die "triage-reviews: missing $agent"
-allowed="$(awk -F': ' '/^tools:/{gsub(/, */," ",$2); print $2; exit}' "$agent")"
-name="$("$here/assign-names.sh" product-manager 2>/dev/null || echo "Sarah")"
-role="$(awk -F' — ' '/^# /{t=$1; sub(/^# +/,"",t); print t; exit}' "$agent")"; [ -n "$role" ] || role="Product Manager"
+  local prompt
+  prompt="$(printf 'You are reviewing pull request #%s on repo %s as the gate reviewer for your role. The diff follows. Do a real review — find what is wrong; do not rubber-stamp.\n\n----- PR #%s DIFF -----\n%s\n----- END DIFF -----\n\nYou do NOT post anything — the harness posts your verdict as a PR comment and sets the gate label from it. End your turn by emitting ONLY this FINAL ```json fenced block, nothing after it:\n```json\n{"record_type":"REVIEW","pr":%s,"verdict":"<approve|request-changes|comment>","body":"<your review as markdown, citing specifics>"}\n```\n' "$pr" "$repo" "$pr" "$diff" "$pr")"
 
-existing="$(gh issue list --repo "$ghrepo" --state open --json title --limit 300 | jq -r '.[].title' 2>/dev/null || true)"
-
-prompt="$(printf 'You are the PM triaging open pull requests into REVIEW tasks, routing each to its gate owner(s) per the RACI:\n- EVERY PR needs the Lead Engineer (reviewer slug: lead-engineer).\n- A PR that changes tests/ or scripts/ ALSO needs Head of QA (head-of-qa).\n- A PR with visual/UI changes ALSO needs Head of Design (head-of-design).\n\nOpen PRs awaiting review (number, title, files):\n%s\n\nReview tasks ALREADY open — do NOT duplicate (match on title):\n%s\n\nYou CANNOT file issues — return ONLY the FINAL ```json fenced array, nothing after the closing fence. One item per (PR, reviewer):\n```json\n[{"pr":<number>,"reviewer":"<lead-engineer|head-of-qa|head-of-design>","priority":"<p0|p1|p2|p3>","title":"Review PR #<number> — <Role>","body":"<what this gate should check, as markdown>"}]\n```\n' "$pending" "${existing:-(none)}")"
-
-echo "${PL_C_HEAD}triage-reviews: -> PM (${name}) routing ${count} PR(s) awaiting review${PL_C_RST}" >&2
-raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed --output-format json 2>/dev/null || true)"
-result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null || true)"
-[ -n "$result" ] || result="$raw"
-arr="$(printf '%s' "$result" | pl_extract_json 2>/dev/null || true)"
-if ! printf '%s' "$arr" | jq -e 'type=="array"' >/dev/null 2>&1; then
-  echo "triage-reviews: PM returned no parseable review-task array — nothing filed" >&2; exit 0
-fi
-
-n="$(printf '%s' "$arr" | jq 'length')"; filed=0; dup=0
-for ((i=0; i<n; i++)); do
-  pr="$(printf '%s'    "$arr" | jq -r ".[$i].pr // empty")"
-  reviewer="$(printf '%s' "$arr" | jq -r ".[$i].reviewer // empty")"
-  prio="$(printf '%s'  "$arr" | jq -r ".[$i].priority // \"p2\"")"
-  title="$(printf '%s' "$arr" | jq -r ".[$i].title // empty")"
-  body="$(printf '%s'  "$arr" | jq -r ".[$i].body // empty")"
-  [ -n "$pr" ] && [ -n "$reviewer" ] && [ -n "$title" ] && [ -n "$body" ] || continue
-  if ! _is_gate_reviewer "$reviewer"; then
-    echo "triage-reviews: rejected non-gate reviewer '${reviewer}' for PR #${pr}" >&2; continue
-  fi
-  if printf '%s\n' "$existing" | grep -qxF "$title"; then dup=$((dup+1)); continue; fi
-  case "$prio" in p0|p1|p2|p3) ;; *) prio="p2";; esac
-
+  echo "${PL_C_HEAD}triage-reviews: -> ${name} (${role}) reviewing PR #${pr}${PL_C_RST}" >&2
   if [ "$dry_run" -eq 1 ]; then
-    echo "triage-reviews (dry-run): would file '${title}' routed persona:${reviewer} state:ready ${prio}" >&2
-    continue
+    echo "triage-reviews (dry-run): would review PR #${pr} as ${slug} and post comment + gate label on the PR" >&2
+    return 0
   fi
 
-  if url="$("$here/queue.sh" file --persona "$name" --tier "$role" --type ROUTING --title "$title" --body "$body" --repo "$ghrepo" 2>&1)"; then
-    num="${url##*/}"
-    "$here/queue.sh" label "$num" --add "persona:${reviewer}" --repo "$ghrepo" >/dev/null 2>&1 || true
-    "$here/queue.sh" label "$num" --add "state:ready"         --repo "$ghrepo" >/dev/null 2>&1 || true
-    "$here/queue.sh" label "$num" --add "priority:${prio}"    --repo "$ghrepo" >/dev/null 2>&1 || true
-    existing="$(printf '%s\n%s' "$existing" "$title")"
-    filed=$((filed+1))
-    echo "${PL_C_OK}triage-reviews: filed #${num} '${title}' → persona:${reviewer} state:ready ${prio}${PL_C_RST}" >&2
-  else
-    echo "triage-reviews: FILE FAILED for '${title}':" >&2; printf '%s\n' "$url" | sed 's/^/    /' >&2
+  local raw result rec verdict body
+  raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" --allowedTools $allowed --output-format json 2>/dev/null || true)"
+  result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null || true)"; [ -n "$result" ] || result="$raw"
+  rec="$(printf '%s' "$result" | pl_extract_json 2>/dev/null || true)"
+  verdict="$(printf '%s' "$rec" | jq -r '.verdict // empty' 2>/dev/null || true)"
+  body="$(printf '%s'    "$rec" | jq -r '.body // empty'    2>/dev/null || true)"
+  if [ -z "$body" ]; then
+    echo "${PL_C_WARN}triage-reviews: <- ${name} returned no parseable review for PR #${pr} — skipping (no comment, no label)${PL_C_RST}" >&2
+    return 0
   fi
+
+  # Post the verdict as a PR COMMENT (#216: never native --approve on own PR) and set the gate label.
+  "$here/review.sh" "$pr" --persona "$name" --tier "$role" --type REVIEW --body "$body" --event comment --repo "$ghrepo" </dev/null >/dev/null 2>&1 || true
+  case "$verdict" in
+    approve|approved)
+      gh pr edit "$pr" --repo "$ghrepo" --add-label "$glabel" --remove-label "gate:changes-requested" </dev/null >/dev/null 2>&1 || true
+      echo "${PL_C_OK}triage-reviews: <- ${name} approved PR #${pr} → ${glabel}${PL_C_RST}" >&2 ;;
+    request-changes|request_changes|changes-requested)
+      gh pr edit "$pr" --repo "$ghrepo" --add-label "gate:changes-requested" --remove-label "$glabel" </dev/null >/dev/null 2>&1 || true
+      echo "${PL_C_WARN}triage-reviews: <- ${name} requested changes on PR #${pr} → gate:changes-requested${PL_C_RST}" >&2 ;;
+    *)
+      echo "${PL_C_DIM}triage-reviews: <- ${name} commented on PR #${pr} (no gate change)${PL_C_RST}" >&2 ;;
+  esac
+}
+
+prs="$(gh pr list --repo "$ghrepo" --state open --json number,labels)"
+nums="$(printf '%s' "$prs" | jq -r '.[].number' 2>/dev/null || true)"
+[ -n "$nums" ] || { echo "triage-reviews: no open PRs" >&2; exit 0; }
+
+reviewed=0
+for pr in $nums; do
+  labels="$(printf '%s' "$prs" | jq -r --arg n "$pr" '.[] | select(.number==($n|tonumber)) | .labels[].name')"
+  has_label "state:merged"   "$labels" && continue
+  has_label "state:accepted" "$labels" && continue
+  if has_label "gate:changes-requested" "$labels"; then
+    echo "triage-reviews: PR #${pr} has changes requested — awaiting the dev, skipping" >&2; continue
+  fi
+
+  files="$(gh pr view "$pr" --repo "$ghrepo" --json files | jq -r '.files[].path' 2>/dev/null || true)"
+  diff="$(gh pr diff "$pr" --repo "$ghrepo" 2>/dev/null | head -c 60000 || true)"
+
+  while IFS= read -r slug; do
+    [ -n "$slug" ] || continue
+    glabel="$(_gate_label_for "$slug")"
+    has_label "$glabel" "$labels" && continue   # already gated by this reviewer — dedup
+    review_one "$pr" "$slug" "$diff" && reviewed=$((reviewed+1)) || true
+  done < <(_gate_reviewers "$files")
 done
 
 "$here/runlog.sh" append --persona "product-manager" --repo "$repo" --trigger "triage-reviews" \
-  --outcome "triaged" --record-type "triage" --action "route-reviews" 2>/dev/null || true
-echo "${PL_C_HEAD}triage-reviews: pass complete — ${filed} review task(s) filed, ${dup} duplicate(s) skipped${PL_C_RST}" >&2
+  --outcome "reviewed" --record-type "triage" --action "review-prs" 2>/dev/null || true
+echo "${PL_C_HEAD}triage-reviews: pass complete — ${reviewed} review(s) dispatched (posted on the PRs, no issues)${PL_C_RST}" >&2
 exit 0

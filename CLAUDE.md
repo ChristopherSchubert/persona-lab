@@ -21,6 +21,15 @@ In this repo the mainline assistant (you) is **not** the team and **not** its or
   attributed record via `scripts/queue.sh` — not as your prose summary.
 - **Adding/changing a role is the founder's call.** Personas propose; the founder decides.
 
+## Bus hygiene: comment, don't spawn issues (NON-NEGOTIABLE)
+- The tracker holds **units of work**, not a log for every observation. **Default to COMMENTING**
+  on the relevant existing issue or PR — findings, review verdicts, QA/design sign-offs, follow-ups,
+  discussion, and steers are comments on their parent (the PR, the issue, or the epic).
+- **Open a NEW issue ONLY for genuinely distinct, standalone work** with its own What/Why/Acceptance.
+- **No proxy issues.** A PR review is dispatched against the PR (`triage-reviews.sh`) and lands as a
+  comment + gate label on it — never a "Review PR #N" tracking issue. Applies to the harness and
+  every persona.
+
 ## Routing must be visible on the issues
 - Every actionable issue carries `persona:<slug>` + `state:ready` + `priority:pN` — that *is*
   the routing, visible on the issue, not in anyone's head. Sarah applies the labels per Remy's

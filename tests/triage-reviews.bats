@@ -1,128 +1,99 @@
-# triage-reviews.bats — the PM review-triage pass (#149/#196): the produce→review trigger. The PM
-# (Sarah) is dispatched with the open PRs awaiting review and returns each routed to its gate owner(s)
-# per the RACI; the harness files the review tasks routed (persona:<slug> + state:ready) so the normal
-# dispatch cycle picks them up. gh + claude are stubbed; NO real model call or issue is created.
+# triage-reviews.bats — the REVIEW pass (#215): dispatch gate reviewer(s) DIRECTLY against each open
+# PR and post the verdict as a COMMENT + gate label ON THE PR. It must NEVER create a tracking issue
+# (bus-hygiene #196). gh + claude are stubbed; no real model call, comment, or issue.
 setup() {
   export PL_RUNS_DIR="$(mktemp -d)/runs"
   export PL_TEST_BIN="$(mktemp -d)"; export PATH="$PL_TEST_BIN:$PATH"
   export PL_GH_LOG="$(mktemp)"
   export PL_FAKE_PRS="$(mktemp)"
-  export PL_FAKE_ISSUES="$(mktemp)"; printf '[]' > "$PL_FAKE_ISSUES"
+  export PL_FAKE_VERDICT="approve"   # what the stubbed reviewer returns; override per test
 
   cat > "$PL_TEST_BIN/gh" <<'SH'
 #!/usr/bin/env bash
 echo "GH $*" >> "$PL_GH_LOG"
 case "$1 $2" in
-  "pr list")    jq '[.[] | {number, title, labels, files}]' "$PL_FAKE_PRS" ;;
-  "issue list") cat "$PL_FAKE_ISSUES" ;;
-  "issue create") echo "https://github.com/acme/persona-lab/issues/777" ;;
-  "repo view")  echo "acme/persona-lab" ;;
+  "pr list")  jq '[.[] | {number, labels}]' "$PL_FAKE_PRS" ;;
+  "pr view")  n="$3"; jq --arg n "$n" '.[] | select(.number==($n|tonumber)) | {files}' "$PL_FAKE_PRS" ;;
+  "pr diff")  echo "diff --git a/x b/x" ;;
+  "repo view") echo "acme/persona-lab" ;;
 esac
 SH
   chmod +x "$PL_TEST_BIN/gh"
   export PL_REPO="persona-lab"
 
-  # claude stub returns whatever PL_FAKE_TRIAGE holds as the model "result".
-  export PL_FAKE_TRIAGE="$(mktemp)"
   cat > "$PL_TEST_BIN/fake-claude" <<'SH'
 #!/usr/bin/env bash
 echo "CLAUDE $*" >> "$PL_GH_LOG"
-printf '{"result":%s}' "$(jq -Rs . < "$PL_FAKE_TRIAGE")"
+printf '{"result":"{\\"record_type\\":\\"REVIEW\\",\\"verdict\\":\\"%s\\",\\"body\\":\\"review body\\"}"}' "${PL_FAKE_VERDICT:-approve}"
 SH
   chmod +x "$PL_TEST_BIN/fake-claude"
   export PL_CLAUDE="$PL_TEST_BIN/fake-claude"
 }
-teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_FAKE_PRS" "$PL_FAKE_ISSUES" "$PL_FAKE_TRIAGE" "$(dirname "$PL_RUNS_DIR")"; }
+teardown() { rm -rf "$PL_TEST_BIN" "$PL_GH_LOG" "$PL_FAKE_PRS" "$(dirname "$PL_RUNS_DIR")"; }
 
-fake_prs()    { printf '%s' "$1" > "$PL_FAKE_PRS"; }
-fake_triage() { printf '%s' "$1" > "$PL_FAKE_TRIAGE"; }   # the JSON array Sarah "returns"
+fake_prs() { printf '%s' "$1" > "$PL_FAKE_PRS"; }
 
-@test "triage-reviews: files an eng review task routed persona:lead-engineer + state:ready" {
-  fake_prs '[{"number":190,"title":"isolation","labels":[],"files":[{"path":"scripts/dispatch.sh"}]}]'
-  fake_triage '```json
-[{"pr":190,"reviewer":"lead-engineer","priority":"p1","title":"Review PR #190 — Lead Engineer","body":"Review the worktree isolation change."}]
-```'
+@test "triage-reviews: dispatches eng review, posts a comment + gate:eng-approved ON THE PR, creates NO issue" {
+  fake_prs '[{"number":190,"labels":[],"files":[{"path":"docs/x.md"}]}]'
   run scripts/triage-reviews.sh
   [ "$status" -eq 0 ]
-  grep -qE "issue create" "$PL_GH_LOG"
-  grep -qE "(add-label|--label).*persona:lead-engineer" "$PL_GH_LOG"
-  grep -qE "(add-label|--label).*state:ready" "$PL_GH_LOG"
+  grep -qE "pr review.*190.*--comment" "$PL_GH_LOG"               # verdict posted ON the PR (comment)
+  grep -qE "pr edit.*190.*--add-label gate:eng-approved" "$PL_GH_LOG"
+  if grep -qE "issue create" "$PL_GH_LOG"; then false; fi          # the whole point: no proxy issue
 }
 
-@test "triage-reviews: files a QA review task when Sarah routes head-of-qa" {
-  fake_prs '[{"number":190,"title":"isolation","labels":[],"files":[{"path":"scripts/dispatch.sh"}]}]'
-  fake_triage '```json
-[{"pr":190,"reviewer":"head-of-qa","priority":"p1","title":"Review PR #190 — Head of QA","body":"QA the scripts change."}]
-```'
+@test "triage-reviews: adds the QA reviewer when the diff touches scripts/ (eng + qa, both on the PR)" {
+  fake_prs '[{"number":190,"labels":[],"files":[{"path":"scripts/dispatch.sh"}]}]'
   run scripts/triage-reviews.sh
   [ "$status" -eq 0 ]
-  grep -qE "(add-label|--label).*persona:head-of-qa" "$PL_GH_LOG"
+  grep -qE "pr edit.*190.*--add-label gate:eng-approved" "$PL_GH_LOG"
+  grep -qE "pr edit.*190.*--add-label gate:qa-approved" "$PL_GH_LOG"
+  if grep -qE "issue create" "$PL_GH_LOG"; then false; fi
 }
 
-@test "triage-reviews: does NOT offer PRs already gate:eng-approved or merged to the PM" {
-  # Both PRs are already past review; the PM should be given an empty pending set → no claude call.
+@test "triage-reviews: dedup — skips a reviewer whose gate label is already present" {
+  fake_prs '[{"number":190,"labels":[{"name":"gate:eng-approved"}],"files":[{"path":"docs/x.md"}]}]'
+  run scripts/triage-reviews.sh
+  [ "$status" -eq 0 ]
+  # eng already approved → lead-engineer not re-dispatched (no second eng review/label)
+  if grep -qE "pr edit.*190.*--add-label gate:eng-approved" "$PL_GH_LOG"; then false; fi
+}
+
+@test "triage-reviews: a request-changes verdict sets gate:changes-requested (comment on PR, no issue)" {
+  fake_prs '[{"number":190,"labels":[],"files":[{"path":"docs/x.md"}]}]'
+  PL_FAKE_VERDICT="request-changes" run scripts/triage-reviews.sh
+  [ "$status" -eq 0 ]
+  grep -qE "pr edit.*190.*--add-label gate:changes-requested" "$PL_GH_LOG"
+  if grep -qE "issue create" "$PL_GH_LOG"; then false; fi
+}
+
+@test "triage-reviews: a PR with changes-requested is skipped (awaiting the dev)" {
+  fake_prs '[{"number":190,"labels":[{"name":"gate:changes-requested"}],"files":[{"path":"docs/x.md"}]}]'
+  run scripts/triage-reviews.sh
+  [ "$status" -eq 0 ]
+  if grep -qE "^CLAUDE|pr edit.*190" "$PL_GH_LOG"; then false; fi
+}
+
+@test "triage-reviews: never creates an issue on any path (the core bus-hygiene guarantee)" {
   fake_prs '[
-    {"number":1,"title":"done","labels":[{"name":"gate:eng-approved"}],"files":[{"path":"a.md"}]},
-    {"number":2,"title":"merged","labels":[{"name":"state:merged"}],"files":[{"path":"b.md"}]},
-    {"number":3,"title":"accepted","labels":[{"name":"state:accepted"}],"files":[{"path":"c.md"}]}
+    {"number":190,"labels":[],"files":[{"path":"scripts/a.sh"}]},
+    {"number":191,"labels":[],"files":[{"path":"docs/b.md"}]}
   ]'
   run scripts/triage-reviews.sh
   [ "$status" -eq 0 ]
-  if grep -qE "^CLAUDE|issue create" "$PL_GH_LOG"; then false; fi
-}
-
-@test "triage-reviews: routes a visual PR to head-of-design when the PM says so" {
-  fake_prs '[{"number":210,"title":"new banner","labels":[],"files":[{"path":"assets/banner.svg"}]}]'
-  fake_triage '```json
-[{"pr":210,"reviewer":"head-of-design","priority":"p2","title":"Review PR #210 — Head of Design","body":"Design sign-off on the banner."}]
-```'
-  run scripts/triage-reviews.sh
-  [ "$status" -eq 0 ]
-  grep -qE "(add-label|--label).*persona:head-of-design" "$PL_GH_LOG"
-}
-
-@test "triage-reviews: a junk PM response files nothing and exits 0 (fail-safe)" {
-  fake_prs '[{"number":190,"title":"isolation","labels":[],"files":[{"path":"scripts/x.sh"}]}]'
-  fake_triage 'I cannot help with that.'
-  run scripts/triage-reviews.sh
-  [ "$status" -eq 0 ]
   if grep -qE "issue create" "$PL_GH_LOG"; then false; fi
 }
 
-@test "triage-reviews: dedup — an already-open review task for the PR is not re-filed" {
-  fake_prs '[{"number":190,"title":"isolation","labels":[],"files":[{"path":"scripts/x.sh"}]}]'
-  printf '%s' '[{"title":"Review PR #190 — Lead Engineer"}]' > "$PL_FAKE_ISSUES"
-  fake_triage '```json
-[{"pr":190,"reviewer":"lead-engineer","priority":"p1","title":"Review PR #190 — Lead Engineer","body":"dup"}]
-```'
-  run scripts/triage-reviews.sh
-  [ "$status" -eq 0 ]
-  if grep -qE "issue create" "$PL_GH_LOG"; then false; fi
-}
-
-@test "triage-reviews: an unknown reviewer slug is rejected (not a gate owner)" {
-  fake_prs '[{"number":190,"title":"isolation","labels":[],"files":[{"path":"a.md"}]}]'
-  fake_triage '```json
-[{"pr":190,"reviewer":"intern","priority":"p1","title":"Review PR #190 — Intern","body":"nope"}]
-```'
-  run scripts/triage-reviews.sh
-  [ "$status" -eq 0 ]
-  if grep -qE "issue create" "$PL_GH_LOG"; then false; fi
-}
-
-@test "triage-reviews: --dry-run files nothing" {
-  fake_prs '[{"number":190,"title":"isolation","labels":[],"files":[{"path":"scripts/x.sh"}]}]'
-  fake_triage '```json
-[{"pr":190,"reviewer":"lead-engineer","priority":"p1","title":"Review PR #190 — Lead Engineer","body":"x"}]
-```'
+@test "triage-reviews: --dry-run posts nothing and creates nothing" {
+  fake_prs '[{"number":190,"labels":[],"files":[{"path":"docs/x.md"}]}]'
   run scripts/triage-reviews.sh --dry-run
   [ "$status" -eq 0 ]
-  if grep -qE "issue create" "$PL_GH_LOG"; then false; fi
+  if grep -qE "pr review|pr edit.*gate:|issue create|^CLAUDE" "$PL_GH_LOG"; then false; fi
 }
 
-@test "triage-reviews: no PRs awaiting review exits 0 without dispatching the PM" {
+@test "triage-reviews: no open PRs exits 0 quietly" {
   fake_prs '[]'
   run scripts/triage-reviews.sh
   [ "$status" -eq 0 ]
-  if grep -qE "^CLAUDE|issue create" "$PL_GH_LOG"; then false; fi
+  if grep -qE "^CLAUDE|pr review|issue create" "$PL_GH_LOG"; then false; fi
 }
