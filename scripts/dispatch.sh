@@ -196,17 +196,18 @@ gate_label_for() { case "$1" in lead-engineer) echo "gate:eng-approved";; head-o
 # gate label + clear any block; request-changes → set the blocking label + clear that reviewer's
 # approval. add/remove are separate gh calls so a missing-label removal can't drop the add (set -e).
 apply_gate_label() {
-  local pr="$1" persona="$2" event="$3" glabel
+  local pr="$1" persona="$2" verdict="$3" glabel
   glabel="$(gate_label_for "$persona")"; [ -n "$glabel" ] || return 0
-  case "$event" in
-    approve)
-      gh pr edit "$pr" --repo "$ghrepo" --add-label "$glabel"               >/dev/null 2>&1 || true
-      gh pr edit "$pr" --repo "$ghrepo" --remove-label "gate:changes-requested" >/dev/null 2>&1 || true
+  case "$verdict" in
+    approve|approved)
+      gh pr edit "$pr" --repo "$ghrepo" --add-label "$glabel"                  </dev/null >/dev/null 2>&1 || true
+      gh pr edit "$pr" --repo "$ghrepo" --remove-label "gate:changes-requested" </dev/null >/dev/null 2>&1 || true
       echo "${PL_C_OK}dispatch: <- gate ${glabel} applied to PR #${pr}${PL_C_RST}" >&2 ;;
-    request-changes)
-      gh pr edit "$pr" --repo "$ghrepo" --add-label "gate:changes-requested" >/dev/null 2>&1 || true
-      gh pr edit "$pr" --repo "$ghrepo" --remove-label "$glabel"             >/dev/null 2>&1 || true
+    request-changes|request_changes|changes-requested)
+      gh pr edit "$pr" --repo "$ghrepo" --add-label "gate:changes-requested" </dev/null >/dev/null 2>&1 || true
+      gh pr edit "$pr" --repo "$ghrepo" --remove-label "$glabel"             </dev/null >/dev/null 2>&1 || true
       echo "${PL_C_WARN}dispatch: <- gate:changes-requested applied to PR #${pr} (cleared ${glabel})${PL_C_RST}" >&2 ;;
+    *) : ;;  # comment / no verdict → no gate change
   esac
 }
 
@@ -221,9 +222,9 @@ advance_state() {
   # ready (re-selectable) rather than floating with no state, and we log loudly. dev:ready is
   # cleaned up best-effort afterwards: it's inert once state:ready is gone (selection needs
   # state:ready), so a stray dev:ready can't resurrect the treadmill.
-  if gh issue edit "$n" --repo "$ghrepo" --add-label "$next" --remove-label "state:ready" >/dev/null 2>&1; then
+  if gh issue edit "$n" --repo "$ghrepo" --add-label "$next" --remove-label "state:ready" </dev/null >/dev/null 2>&1; then
     echo "dispatch: state #${n} -> ${next} (left state:ready) [${rt}]" >&2
-    gh issue edit "$n" --repo "$ghrepo" --remove-label "dev:ready" >/dev/null 2>&1 || true
+    gh issue edit "$n" --repo "$ghrepo" --remove-label "dev:ready" </dev/null >/dev/null 2>&1 || true
   else
     echo "dispatch: WARNING #${n} state advance FAILED — stays state:ready, will re-select [${rt}]" >&2
   fi
@@ -271,19 +272,15 @@ dispatch_one() {
     verdict="$(printf '%s' "$record" | jq -r '.verdict // empty' 2>/dev/null)"
     if _valid_rtype "$rtype" && [ -n "$body" ]; then
       if [ "$rtype" = "REVIEW" ] && [ -n "$pr" ]; then
-        local event
-        case "$verdict" in
-          approve|approved)                                   event="approve" ;;
-          request-changes|request_changes|changes-requested) event="request-changes" ;;
-          comment) event="comment" ;;
-          *) event="comment"
-             [ -n "$verdict" ] && echo "dispatch: <- #${issue_number} '${persona}' unrecognized verdict '${verdict}' — posting as a plain PR comment" >&2 ;;
-        esac
-        if url="$("$here/review.sh" "$pr" --persona "$name" --tier "$role" --type "$rtype" --body "$body" --event "$event" --repo "$ghrepo" 2>&1)"; then
+        # #216: post the verdict as a PR COMMENT — NEVER gh-native --approve/--request-changes, which
+        # GitHub rejects on your own PR under the bus's single gh identity (that failure looped the
+        # review forever, #217). The merge GATE is the label apply_gate_label sets from the verdict,
+        # not a native PR approval — so integrate.sh still gates correctly.
+        if url="$("$here/review.sh" "$pr" --persona "$name" --tier "$role" --type "$rtype" --body "$body" --event comment --repo "$ghrepo" </dev/null 2>&1)"; then
           outcome="dispatched"
-          echo "${PL_C_OK}dispatch: <- #${issue_number} '${persona}' posted ${rtype} on PR #${pr} (${event}) -> ${url}${PL_C_RST}" >&2
+          echo "${PL_C_OK}dispatch: <- #${issue_number} '${persona}' posted ${rtype} on PR #${pr} (verdict: ${verdict:-comment}) -> ${url}${PL_C_RST}" >&2
           advance_state "$issue_number" "$rtype"   # #132: the REVIEW path must leave state:ready too
-          apply_gate_label "$pr" "$persona" "$event"   # #149: the reviewer's verdict drives the merge gate
+          apply_gate_label "$pr" "$persona" "$verdict"   # #149/#216: the VERDICT drives the gate label (not a native approval)
         else
           echo "${PL_C_ERR}dispatch: <- #${issue_number} '${persona}' PR-REVIEW POST FAILED (PR #${pr}):${PL_C_RST}" >&2
           printf '%s\n' "$url" | sed 's/^/        /' >&2
@@ -316,6 +313,29 @@ dispatch_one() {
     --action  "dispatch" \
     --issue-number "$issue_number" \
     ${rl_extra[@]+"${rl_extra[@]}"} || true   # non-fatal: don't lose the dispatch over logging
+
+  # #217: forward progress on FAILURE. advance_state only fires on success, so a task that keeps
+  # failing keeps state:ready and is re-dispatched every cycle — burning a paid call each time
+  # (the review-loop incident). After PL_MAX_FAILURES total failed dispatches, PARK it (off
+  # state:ready) so it stops being selected; triage/self-healing (#154) can investigate.
+  if [ "$outcome" = "failed" ]; then
+    local fails; fails="$(_count_failures "$issue_number")"
+    if [ "$fails" -ge "${PL_MAX_FAILURES:-3}" ]; then
+      gh issue edit "$issue_number" --repo "$ghrepo" --remove-label "state:ready" --add-label "blocked-by:dependency" </dev/null >/dev/null 2>&1 || true
+      echo "${PL_C_ERR}dispatch: #${issue_number} failed ${fails}x — parked off state:ready to stop the retry loop; investigate (#217/#154)${PL_C_RST}" >&2
+    fi
+  fi
+}
+
+# Count this issue's failed dispatches recorded in the run-log (string-compares the issue number so
+# it matches whether the log stored it as a number or string). Bulletproof under set -euo pipefail:
+# the no-match glob and an empty jq are both absorbed so it always exits 0 with a number.
+_count_failures() {
+  local n="$1" d c; d="$(pl_runs_dir)"
+  c="$( { cat "$d"/*.ndjson 2>/dev/null || true; } \
+        | jq -r --arg n "$n" 'select((.issue_number|tostring)==$n and .outcome=="failed") | 1' 2>/dev/null \
+        | grep -c . 2>/dev/null || true )"
+  printf '%s' "${c:-0}"
 }
 
 # Readers first, concurrently, with NO writer lock. Each background job runs with its own
