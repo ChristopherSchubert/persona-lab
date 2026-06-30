@@ -157,3 +157,34 @@ That is wrong. Here is my actual review:
   PL_BOT_ENV="/nonexistent/bot.env" BATS_VERSION= pl_load_bot_identity
   [ -z "${GH_TOKEN:-}" ]
 }
+
+# ── pl_agent_model (#234) ──────────────────────────────────────────────────────────────────────────
+
+@test "pl_agent_model: returns the model value from agent frontmatter (with space after colon)" {
+  local f; f="$(mktemp)"
+  printf -- '---\nname: test-persona\ntools: Read\nmodel: claude-haiku-4-5-20251001\n---\n' > "$f"
+  result="$(pl_agent_model "$f")"
+  rm -f "$f"
+  [ "$result" = "claude-haiku-4-5-20251001" ]
+}
+
+@test "pl_agent_model: returns the model value with no space after colon (valid YAML)" {
+  local f; f="$(mktemp)"
+  printf -- '---\nname: test-persona\ntools: Read\nmodel:claude-sonnet-4-6\n---\n' > "$f"
+  result="$(pl_agent_model "$f")"
+  rm -f "$f"
+  [ "$result" = "claude-sonnet-4-6" ]
+}
+
+@test "pl_agent_model: returns empty string when model: field is absent" {
+  local f; f="$(mktemp)"
+  printf -- '---\nname: test-persona\ntools: Read\n---\n' > "$f"
+  result="$(pl_agent_model "$f")"
+  rm -f "$f"
+  [ -z "$result" ]
+}
+
+@test "pl_agent_model: returns empty string for /dev/null (missing file fallback)" {
+  result="$(pl_agent_model /dev/null)"
+  [ -z "$result" ]
+}
