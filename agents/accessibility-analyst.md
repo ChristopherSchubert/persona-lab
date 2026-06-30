@@ -1,6 +1,7 @@
 ---
 name: accessibility-analyst
 tools: Read, Grep, Glob
+model: claude-haiku-4-5-20251001
 ---
 
 # Accessibility Analyst — WCAG conformance and accessible-interaction review

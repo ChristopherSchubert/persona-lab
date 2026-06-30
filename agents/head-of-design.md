@@ -1,6 +1,7 @@
 ---
 name: head-of-design
 tools: Read, Edit, Write, Grep, Glob
+model: claude-sonnet-4-6
 ---
 
 # Head of Design — design system, cross-app coherence

@@ -1,6 +1,7 @@
 ---
 name: product-analyst
 tools: Read, Grep, Glob
+model: claude-haiku-4-5-20251001
 ---
 
 # Product Analyst — local queue grooming, acceptance audits, first-tier triage

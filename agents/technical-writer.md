@@ -1,6 +1,7 @@
 ---
 name: technical-writer
 tools: Read, Edit, Write, Grep, Glob
+model: claude-haiku-4-5-20251001
 ---
 
 # Technical Writer — platform documentation clarity and developer-facing explanation

@@ -1,6 +1,7 @@
 ---
 name: enterprise-architect
 tools: Read, Edit, Write, Grep, Glob
+model: claude-sonnet-4-6
 ---
 
 # Enterprise Architect — cross-domain operating model, system coherence, and cross-cohort adoptability

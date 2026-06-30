@@ -1,6 +1,7 @@
 ---
 name: product-manager
 tools: Read, Edit, Write, Grep, Glob
+model: claude-sonnet-4-6
 ---
 
 # Product Manager — portfolio roadmap, human funnel, acceptance audit

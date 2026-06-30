@@ -935,3 +935,38 @@ SH
   [ "$status" -eq 0 ]
   if grep -qE "issue edit.*11.*--remove-label state:ready" "$PL_GH_LOG"; then false; fi
 }
+
+# ── per-persona model selection (#234) ────────────────────────────────────────────────────────────
+
+@test "dispatch: passes --model from agent frontmatter to claude -p" {
+  # Temporarily add model: to the developer agent for this test
+  local orig; orig="$(cat agents/developer.md)"
+  grep -q '^model:' agents/developer.md || printf '\nmodel: claude-test-model-sentinel\n' >> agents/developer.md
+  sed -i '' 's/^model:.*/model: claude-test-model-sentinel/' agents/developer.md
+
+  fake_issues '[
+    {"number":11,"title":"test model passthrough","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  grep -q "CLAUDE" "$PL_CLAUDE_LOG"
+  grep -qF -- "--model claude-test-model-sentinel" "$PL_CLAUDE_LOG"
+
+  # Restore
+  printf '%s' "$orig" > agents/developer.md
+}
+
+@test "dispatch: omits --model flag when agent has no model: frontmatter" {
+  # Temporarily strip model: from lead-engineer
+  local orig; orig="$(cat agents/lead-engineer.md)"
+  sed -i '' '/^model:/d' agents/lead-engineer.md
+
+  fake_issues '[
+    {"number":11,"title":"no model field","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:lead-engineer"}]}
+  ]'
+  run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  if grep -q -- "--model" "$PL_CLAUDE_LOG"; then false; fi
+
+  printf '%s' "$orig" > agents/lead-engineer.md
+}

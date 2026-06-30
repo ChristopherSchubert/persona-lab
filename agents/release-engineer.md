@@ -1,6 +1,7 @@
 ---
 name: release-engineer
 tools: Read, Grep, Glob, Bash
+model: claude-sonnet-4-6
 ---
 
 # Release Engineer — branch strategy, merges, releases, and CI/CD

@@ -1,6 +1,7 @@
 ---
 name: qa-analyst
 tools: Read, Grep, Glob, Bash
+model: claude-haiku-4-5-20251001
 ---
 
 # QA Analyst — repo-level verification, regression hunting, acceptance proof

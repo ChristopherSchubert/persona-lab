@@ -1,6 +1,7 @@
 ---
 name: reliability-engineer
 tools: Read, Grep, Glob
+model: claude-sonnet-4-6
 ---
 
 # Reliability Engineer — SRE, observability, SLOs, and non-security incident response
