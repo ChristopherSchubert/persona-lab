@@ -115,14 +115,14 @@ setup() { export PL_RUNS="$(mktemp -d)/runs"; }
   run_id="$(scripts/runlog.sh append --persona Ben --repo finances --trigger summon --outcome pending)"
   run scripts/runlog.sh update --id "$run_id" --outcome acted --tokens 1200
   [ "$status" -eq 0 ]
-  line="$(grep "\"$run_id\"" "$PL_RUNS/$(date -u +%F).ndjson")"
+  line="$(jq -c --arg id "$run_id" 'select(.run_id == $id)' "$PL_RUNS/$(date -u +%F).ndjson")"
   echo "$line" | jq -e '.outcome == "acted" and .cost_tokens == 1200'
 }
 
 @test "runlog: update --id keeps exactly one record for that run_id" {
   run_id="$(scripts/runlog.sh append --persona Ben --repo finances --trigger summon --outcome pending)"
   scripts/runlog.sh update --id "$run_id" --outcome acted --tokens 1200
-  count="$(grep -c "\"$run_id\"" "$PL_RUNS/$(date -u +%F).ndjson")"
+  count="$(jq -c --arg id "$run_id" 'select(.run_id == $id)' "$PL_RUNS/$(date -u +%F).ndjson" | wc -l | tr -d ' ')"
   [ "$count" -eq 1 ]
 }
 
@@ -130,7 +130,7 @@ setup() { export PL_RUNS="$(mktemp -d)/runs"; }
   run_id="$(scripts/runlog.sh append --persona Doug --repo persona-lab --trigger summon --outcome pending \
     --role developer --issue-number 42)"
   scripts/runlog.sh update --id "$run_id" --outcome dispatched --tokens 5000
-  line="$(grep "\"$run_id\"" "$PL_RUNS/$(date -u +%F).ndjson")"
+  line="$(jq -c --arg id "$run_id" 'select(.run_id == $id)' "$PL_RUNS/$(date -u +%F).ndjson")"
   echo "$line" | jq -e '.persona == "Doug" and .repo == "persona-lab" and .role == "developer" and .issue_number == 42'
 }
 
@@ -142,14 +142,14 @@ setup() { export PL_RUNS="$(mktemp -d)/runs"; }
 @test "runlog: update --id with artifact-url merges into record" {
   run_id="$(scripts/runlog.sh append --persona Ben --repo finances --trigger summon --outcome pending)"
   scripts/runlog.sh update --id "$run_id" --outcome dispatched --artifact-url "https://github.com/o/r/issues/7"
-  line="$(grep "\"$run_id\"" "$PL_RUNS/$(date -u +%F).ndjson")"
+  line="$(jq -c --arg id "$run_id" 'select(.run_id == $id)' "$PL_RUNS/$(date -u +%F).ndjson")"
   echo "$line" | jq -e '.artifact_url == "https://github.com/o/r/issues/7"'
 }
 
 @test "runlog: updated record passes validate-run-record" {
   run_id="$(scripts/runlog.sh append --persona Ben --repo finances --trigger summon --outcome pending)"
   scripts/runlog.sh update --id "$run_id" --outcome acted --tokens 800
-  line="$(grep "\"$run_id\"" "$PL_RUNS/$(date -u +%F).ndjson")"
+  line="$(jq -c --arg id "$run_id" 'select(.run_id == $id)' "$PL_RUNS/$(date -u +%F).ndjson")"
   run scripts/validate-run-record.sh "$line"
   [ "$status" -eq 0 ]
 }
