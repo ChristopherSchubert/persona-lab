@@ -95,3 +95,81 @@ setup() { export PL_RUNS="$(mktemp -d)/runs"; }
   run scripts/validate-run-record.sh "$line"
   [ "$status" -eq 0 ]
 }
+
+# --- --id / update path (issue #7) ---
+
+@test "runlog: append prints a run_id on stdout" {
+  run scripts/runlog.sh append --persona Ben --repo finances --trigger summon --outcome pending
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ ^run-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$ ]]
+}
+
+@test "runlog: append writes run_id field to the NDJSON record" {
+  run scripts/runlog.sh append --persona Ben --repo finances --trigger summon --outcome pending
+  [ "$status" -eq 0 ]
+  line="$(tail -1 "$PL_RUNS/$(date -u +%F).ndjson")"
+  echo "$line" | jq -e '.run_id | type == "string"'
+}
+
+@test "runlog: update --id patches outcome and cost_tokens in place" {
+  run_id="$(scripts/runlog.sh append --persona Ben --repo finances --trigger summon --outcome pending)"
+  run scripts/runlog.sh update --id "$run_id" --outcome acted --tokens 1200
+  [ "$status" -eq 0 ]
+  line="$(jq -c --arg id "$run_id" 'select(.run_id == $id)' "$PL_RUNS/$(date -u +%F).ndjson")"
+  echo "$line" | jq -e '.outcome == "acted" and .cost_tokens == 1200'
+}
+
+@test "runlog: update --id keeps exactly one record for that run_id" {
+  run_id="$(scripts/runlog.sh append --persona Ben --repo finances --trigger summon --outcome pending)"
+  scripts/runlog.sh update --id "$run_id" --outcome acted --tokens 1200
+  count="$(jq -c --arg id "$run_id" 'select(.run_id == $id)' "$PL_RUNS/$(date -u +%F).ndjson" | wc -l | tr -d ' ')"
+  [ "$count" -eq 1 ]
+}
+
+@test "runlog: update --id preserves all original fields" {
+  run_id="$(scripts/runlog.sh append --persona Doug --repo persona-lab --trigger summon --outcome pending \
+    --role developer --issue-number 42)"
+  scripts/runlog.sh update --id "$run_id" --outcome dispatched --tokens 5000
+  line="$(jq -c --arg id "$run_id" 'select(.run_id == $id)' "$PL_RUNS/$(date -u +%F).ndjson")"
+  echo "$line" | jq -e '.persona == "Doug" and .repo == "persona-lab" and .role == "developer" and .issue_number == 42'
+}
+
+@test "runlog: update --id on nonexistent id exits non-zero" {
+  run scripts/runlog.sh update --id "run-00000000T000000Z-zzzzzzzz" --outcome acted
+  [ "$status" -ne 0 ]
+}
+
+@test "runlog: update --id with artifact-url merges into record" {
+  run_id="$(scripts/runlog.sh append --persona Ben --repo finances --trigger summon --outcome pending)"
+  scripts/runlog.sh update --id "$run_id" --outcome dispatched --artifact-url "https://github.com/o/r/issues/7"
+  line="$(jq -c --arg id "$run_id" 'select(.run_id == $id)' "$PL_RUNS/$(date -u +%F).ndjson")"
+  echo "$line" | jq -e '.artifact_url == "https://github.com/o/r/issues/7"'
+}
+
+@test "runlog: updated record passes validate-run-record" {
+  run_id="$(scripts/runlog.sh append --persona Ben --repo finances --trigger summon --outcome pending)"
+  scripts/runlog.sh update --id "$run_id" --outcome acted --tokens 800
+  line="$(jq -c --arg id "$run_id" 'select(.run_id == $id)' "$PL_RUNS/$(date -u +%F).ndjson")"
+  run scripts/validate-run-record.sh "$line"
+  [ "$status" -eq 0 ]
+}
+
+@test "runlog: update --id finds record in an older-dated file (cross-date lookup)" {
+  # Simulate a record written to a "yesterday" file by writing directly.
+  mkdir -p "$PL_RUNS"
+  yesterday_file="$PL_RUNS/2020-01-01.ndjson"
+  old_id="run-20200101T000000Z-deadbeef"
+  printf '{"run_id":"%s","ts":"2020-01-01T00:00:00Z","persona":"Ben","repo":"finances","trigger":"summon","outcome":"pending","cost_tokens":0}\n' \
+    "$old_id" > "$yesterday_file"
+
+  scripts/runlog.sh update --id "$old_id" --outcome acted --tokens 42
+  line="$(grep "\"$old_id\"" "$yesterday_file")"
+  echo "$line" | jq -e '.outcome == "acted"'
+  echo "$line" | jq -e '.cost_tokens == 42'
+  # MUTATION PROOF: remove the multi-file search loop → update exits non-zero, this fails.
+}
+
+@test "runlog: update without --id exits non-zero" {
+  run scripts/runlog.sh update --outcome foo
+  [ "$status" -ne 0 ]
+}
