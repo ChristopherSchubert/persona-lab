@@ -12,8 +12,8 @@
 # hours). Each stage is a real reactor invoked via ${PL_*_SH:-$here/<stage>.sh}, overridable for tests.
 #
 # --drain (loop to quiescence — the once-a-day backlog cleaner, #187) is intentionally REFUSED until
-# worktree isolation (#109) is on main: looping dispatch without it re-entangles branches. Single-pass
-# is safe today (one mutator per pass, same as a bare dispatch).
+# #187 is built. Worktree isolation (#109) is now on main (the prior blocker), but --drain also
+# needs dispatch timeout (#173) before it's safe for unattended loops. Single-pass is safe today.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.sh"
 
@@ -21,7 +21,7 @@ passthru=()
 while [ $# -gt 0 ]; do case "$1" in
   --dry-run) passthru+=(--dry-run); shift;;
   --repo)    export PL_REPO="$2"; shift 2;;   # via env — every reactor honors PL_REPO (dispatch has no --repo flag)
-  --drain)   pl_die "cycle: --drain (loop-to-quiescence, #187) is not enabled yet — it requires worktree isolation (#109) on main, else looping dispatch re-entangles branches. Run cycle.sh (single pass) repeatedly for now.";;
+  --drain)   pl_die "cycle: --drain (#187) is not built yet — needs dispatch timeout (#173) before it is safe for unattended loops. Run cycle.sh (single pass) repeatedly for now.";;
   *)         pl_die "cycle: unknown arg $1";;
 esac; done
 
