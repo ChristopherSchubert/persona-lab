@@ -23,6 +23,7 @@ fi
 # Schema: ts/persona/repo/trigger/outcome must be strings; cost_tokens must be a number if present.
 errors="$(echo "$record" | jq -r '
   [
+    (if (.run_id | type) != "string"   then "run_id must be a string (got \(.run_id | type))"   else empty end),
     (if (.ts | type) != "string"       then "ts must be a string (got \(.ts | type))"       else empty end),
     (if (.persona | type) != "string"  then "persona must be a string (got \(.persona | type))"  else empty end),
     (if (.repo | type) != "string"     then "repo must be a string (got \(.repo | type))"     else empty end),

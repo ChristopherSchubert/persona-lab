@@ -153,3 +153,18 @@ setup() { export PL_RUNS="$(mktemp -d)/runs"; }
   run scripts/validate-run-record.sh "$line"
   [ "$status" -eq 0 ]
 }
+
+@test "runlog: update --id finds record in an older-dated file (cross-date lookup)" {
+  # Simulate a record written to a "yesterday" file by writing directly.
+  mkdir -p "$PL_RUNS"
+  yesterday_file="$PL_RUNS/2020-01-01.ndjson"
+  old_id="run-20200101T000000Z-deadbeef"
+  printf '{"run_id":"%s","ts":"2020-01-01T00:00:00Z","persona":"Ben","repo":"finances","trigger":"summon","outcome":"pending","cost_tokens":0}\n' \
+    "$old_id" > "$yesterday_file"
+
+  scripts/runlog.sh update --id "$old_id" --outcome acted --tokens 42
+  line="$(grep "\"$old_id\"" "$yesterday_file")"
+  echo "$line" | jq -e '.outcome == "acted"'
+  echo "$line" | jq -e '.cost_tokens == 42'
+  # MUTATION PROOF: remove the multi-file search loop → update exits non-zero, this fails.
+}

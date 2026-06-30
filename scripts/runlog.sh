@@ -79,13 +79,12 @@ else  # update
 
   # Find the NDJSON file containing this run_id (search newest-first: today → older).
   target_file=""
-  for f in $(find "$runs" -maxdepth 1 -name '*.ndjson' -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null); do
+  while IFS= read -r f; do
     [ -f "$f" ] || continue
     if jq -e --arg id "$run_id" 'select(.run_id == $id)' "$f" >/dev/null 2>&1; then
-      target_file="$f"
-      break
+      target_file="$f"; break
     fi
-  done
+  done < <(find "$runs" -maxdepth 1 -name '*.ndjson' 2>/dev/null | sort -r)
   [ -n "$target_file" ] || pl_die "runlog.sh update: run_id '$run_id' not found"
 
   # Atomically rewrite the file, merging new fields into the matching record.
