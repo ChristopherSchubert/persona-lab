@@ -22,6 +22,17 @@ rounds_set=0
 drain=0
 dry_run=0
 while [ $# -gt 0 ]; do case "$1" in
+  --help|-h)  cat <<'HELP'
+Usage: scripts/cycle.sh [--rounds N] [--drain] [--dry-run] [--repo owner/repo]
+
+  --rounds N    Run exactly N full passes (default: 1)
+  --drain       Loop until no state:ready issues remain (mutually exclusive with --rounds)
+  --dry-run     Print what would run, touch nothing (incompatible with --drain)
+  --repo        Override target repo (also set via PL_REPO)
+
+One pass = triage-reviews → dispatch → integrate → accept, in that order.
+HELP
+              exit 0;;
   --dry-run)  passthru+=(--dry-run); dry_run=1; shift;;
   --repo)     export PL_REPO="$2"; shift 2;;
   --rounds)   [ $# -ge 2 ] || pl_die "cycle: --rounds requires a value"

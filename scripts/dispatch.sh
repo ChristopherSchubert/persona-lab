@@ -44,6 +44,21 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.s
 
 dry_run=0
 while [ $# -gt 0 ]; do case "$1" in
+  --help|-h)  cat <<'HELP'
+Usage: scripts/dispatch.sh [--dry-run]
+
+  --dry-run    Print the issue that would be dispatched, invoke nothing
+
+Picks the single highest-priority state:ready issue with a persona: label
+and runs its persona via claude -p. One issue per cycle.
+
+Environment:
+  PL_DISPATCH_TIMEOUT    Seconds before a hung claude -p is killed
+  PL_READONLY_CAP        Max concurrent reader dispatches (default: 1)
+  PL_WORKTREE_ISOLATION  Set to 1 to run writer in an isolated git worktree
+  PL_CLAUDE              Path to claude binary (default: claude)
+HELP
+              exit 0;;
   --dry-run) dry_run=1; shift;;
   *) pl_die "dispatch: unknown arg $1";;
 esac; done

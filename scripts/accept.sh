@@ -14,6 +14,16 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.s
 
 dry_run=0; repo_override=""
 while [ $# -gt 0 ]; do case "$1" in
+  --help|-h)  cat <<'HELP'
+Usage: scripts/accept.sh [--dry-run] [--repo owner/repo]
+
+  --dry-run    Print which issues would be closed, touch nothing
+  --repo       Override target repo
+
+PM acceptance-close: finds state:merged issues, posts a closing comment with
+proof, and closes the issue. Never closes without cited evidence.
+HELP
+              exit 0;;
   --dry-run) dry_run=1; shift;;
   --repo)    repo_override="$2"; shift 2;;
   *)         pl_die "accept: unknown arg $1";;

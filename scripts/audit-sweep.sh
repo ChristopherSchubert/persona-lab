@@ -36,9 +36,21 @@ fi
 
 dry_run=0; only=""
 while [ $# -gt 0 ]; do case "$1" in
+  --help|-h)  cat <<'HELP'
+Usage: scripts/audit-sweep.sh [<persona-slug>] [--dry-run] [--repo owner/repo] [-v]
+
+  <persona-slug>    Sweep only this role (e.g. qa-analyst, security-analyst)
+  --dry-run         List who would be swept, invoke nothing
+  --repo            Override target repo
+  -v / --stream     Stream each persona's output live
+
+Runs discovery personas against the repo to find new work and file issues.
+Roles are listed in config/audit-roles.txt.
+HELP
+              exit 0;;
   --dry-run)      dry_run=1; shift;;
   --repo)         repo="$2"; shift 2;;
-  --stream|-v)    PL_STREAM=1; shift;;     # chatty mode: stream each persona's turn live
+  --stream|-v)    PL_STREAM=1; shift;;
   -*)             pl_die "audit-sweep: unknown arg $1";;
   *)              only="$1"; shift;;
 esac; done

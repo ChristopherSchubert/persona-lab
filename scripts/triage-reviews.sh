@@ -16,6 +16,16 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.s
 CLAUDE_BIN="${PL_CLAUDE:-claude}"
 dry_run=0; repo_override=""
 while [ $# -gt 0 ]; do case "$1" in
+  --help|-h)  cat <<'HELP'
+Usage: scripts/triage-reviews.sh [--dry-run] [--repo owner/repo]
+
+  --dry-run    Print which PRs would be reviewed, invoke nothing
+  --repo       Override target repo
+
+Greg reviews every open PR that hasn't had gate:eng-had-turn set yet.
+One review per PR — findings go in a comment, then the PR merges next integrate pass.
+HELP
+              exit 0;;
   --dry-run) dry_run=1; shift;;
   --repo)    repo_override="$2"; shift 2;;
   *)         pl_die "triage-reviews: unknown arg $1";;

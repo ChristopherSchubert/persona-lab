@@ -23,6 +23,16 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.s
 
 dry_run=0; repo_override=""
 while [ $# -gt 0 ]; do case "$1" in
+  --help|-h)  cat <<'HELP'
+Usage: scripts/integrate.sh [--dry-run] [--repo owner/repo]
+
+  --dry-run    Print which PRs would merge, touch nothing
+  --repo       Override target repo
+
+Merges open PRs that have gate:eng-had-turn (or gate:eng-approved).
+Squash merge + delete branch. Labels merged PRs state:merged for PM close.
+HELP
+              exit 0;;
   --dry-run) dry_run=1; shift;;
   --repo)    repo_override="$2"; shift 2;;
   *)         pl_die "integrate: unknown arg $1";;
