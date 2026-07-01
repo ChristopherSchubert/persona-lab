@@ -257,6 +257,7 @@ _extract_json() { pl_extract_json; }
 # also rescues reader output, which the background dispatch would otherwise drop to /dev/null.
 dispatch_one() {
   local issue_number="$1" persona="$2" agent="agents/$2.md" outcome="failed" workdir="${3:-}"
+  local reason="dispatch"   # on failure this becomes the specific cause (logged as .action for diagnosis)
   # Capacity enforced at the invocation: the agent file is the system prompt, and --allowedTools
   # comes from its `tools:` frontmatter (capacity-derived). In -p mode any tool not listed is
   # denied — so a reads-capacity persona cannot Edit/Write *and cannot run a shell to post*.
@@ -310,6 +311,7 @@ dispatch_one() {
           advance_state "$issue_number" "$rtype"   # #132: the REVIEW path must leave state:ready too
           apply_gate_label "$pr" "$persona" "$verdict"   # #149/#216: the VERDICT drives the gate label (not a native approval)
         else
+          reason="pr-review-post-failed"
           echo "${PL_C_ERR}dispatch: <- #${issue_number} '${persona}' PR-REVIEW POST FAILED (PR #${pr}):${PL_C_RST}" >&2
           printf '%s\n' "$url" | sed 's/^/        /' >&2
           url=""
@@ -319,15 +321,21 @@ dispatch_one() {
         echo "${PL_C_OK}dispatch: <- #${issue_number} '${persona}' posted ${rtype} -> ${url}${PL_C_RST}" >&2
         advance_state "$issue_number" "$rtype"   # #132: drive the state machine forward off state:ready
       else
+        reason="comment-post-failed"
         echo "${PL_C_ERR}dispatch: <- #${issue_number} '${persona}' POST FAILED (${rtype}):${PL_C_RST}" >&2
         printf '%s\n' "$url" | sed 's/^/        /' >&2
         url=""
       fi
     else
-      echo "dispatch: <- #${issue_number} '${persona}' returned no valid record (rtype='${rtype}') — raw output:" >&2
+      # The model ran but we couldn't pull a valid enveloped record out of its free-form text.
+      # Distinguish "no JSON at all" from "JSON found but missing record_type/body" so the log
+      # shows whether this is a parse-extraction failure vs a malformed-record failure (#274-adjacent).
+      if [ -z "$record" ]; then reason="no-json-extracted"; else reason="record-missing-rtype-or-body"; fi
+      echo "dispatch: <- #${issue_number} '${persona}' returned no valid record (reason='${reason}', rtype='${rtype}') — raw output:" >&2
       printf '%s\n' "$result" | sed 's/^/    | /' | head -40 >&2
     fi
   else
+    reason="claude-invocation-failed"
     echo "${PL_C_ERR}dispatch: <- #${issue_number} '${persona}' claude invocation FAILED${PL_C_RST}" >&2
   fi
 
@@ -338,7 +346,7 @@ dispatch_one() {
     --trigger "dispatch" \
     --outcome "$outcome" \
     --record-type "dispatch" \
-    --action  "dispatch" \
+    --action  "$reason" \
     --issue-number "$issue_number" \
     ${rl_extra[@]+"${rl_extra[@]}"} || true   # non-fatal: don't lose the dispatch over logging
 
