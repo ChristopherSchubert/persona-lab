@@ -54,6 +54,11 @@ engagement:
     capacity: audits
     # trigger: REVIEW requests filed by the Developer.
 
+  principal-engineer:
+    capacity: audits
+    # trigger: none on the critical path — a wildcard. Summoned to weigh in, or barges in on any
+    # thread where complexity/hype/BS is creeping. Not a gate, not auto-dispatched per issue.
+
   platform-architect:
     capacity: doc-writes
 

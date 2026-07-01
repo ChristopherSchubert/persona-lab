@@ -36,6 +36,7 @@ case "$slug" in
   release-engineer)     title="Release Engineer" ;;
   product-manager)      title="Product Manager" ;;
   lead-engineer)        title="Lead Engineer" ;;
+  principal-engineer)   title="Principal Engineer" ;;
   platform-architect)   title="Platform Architect" ;;
   enterprise-architect) title="Enterprise Architect" ;;
   delivery-manager)     title="Delivery Manager" ;;

@@ -17,6 +17,7 @@ set by the role, not the name.
 |---|---|
 | Product Manager | Sarah |
 | Lead Engineer | Greg |
+| Principal Engineer | Frank |
 | Platform Architect | Tom |
 | Enterprise Architect | Eleanor |
 | Data Architect | Raj |
