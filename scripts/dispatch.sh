@@ -269,7 +269,7 @@ dispatch_one() {
       echo "${PL_C_WARN}dispatch: PL_DISPATCH_TIMEOUT set but 'timeout' not found in PATH — running without timeout (install GNU coreutils)${PL_C_RST}" >&2
     fi
   fi
-  if raw="$(cd "$run_pwd" && "${timeout_args[@]+"${timeout_args[@]}"}" "$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed --output-format stream-json 2>/dev/null)"; then
+  if raw="$(cd "$run_pwd" && "${timeout_args[@]+"${timeout_args[@]}"}" "$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed --output-format stream-json --verbose 2>/dev/null)"; then
     # Scan ALL assistant turns — stream-json gives every event; .result would only be the last turn
     # and any JSON emitted before a tool call would be silently lost (#274).
     result="$(printf '%s' "$raw" | jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text' 2>/dev/null || true)"
