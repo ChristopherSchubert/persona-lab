@@ -45,15 +45,23 @@ stage() {
   fi
 }
 
+# Count state:ready issues. Exits non-zero on gh failure so the drain loop aborts rather than
+# silently treating a transient gh error as "quiescence". The || echo 0 pattern would be a
+# false-complete trap: drain prints "drain complete" on a network blip and exits 0.
 _ready_count() {
-  gh issue list --repo "$(pl_gh_repo)" --label "state:ready" --json number --jq 'length' 2>/dev/null || echo 0
+  local n
+  n="$(gh issue list --repo "$(pl_gh_repo)" --label "state:ready" --json number --jq 'length' 2>/dev/null)" \
+    || { echo "${PL_C_ERR}cycle: gh failed in _ready_count — cannot determine drain quiescence${PL_C_RST}" >&2; return 1; }
+  printf '%s' "$n"
 }
 
 pass=0
 while true; do
   pass=$((pass + 1))
   if [ "$drain" = "1" ]; then
-    echo "${PL_C_HEAD}cycle: pass ${pass} (draining — $(  _ready_count) state:ready)${PL_C_RST}" >&2
+    # Pre-pass snapshot count (informational only — triage may promote more issues during the pass).
+    pre_count="$(_ready_count)" || pl_die "cycle: gh error in pre-pass count — aborting drain"
+    echo "${PL_C_HEAD}cycle: pass ${pass} (draining — ${pre_count} state:ready before this pass)${PL_C_RST}" >&2
   else
     echo "${PL_C_HEAD}cycle: pass ${pass} of ${rounds}${PL_C_RST}" >&2
   fi
@@ -65,7 +73,7 @@ while true; do
   echo "${PL_C_OK}cycle: pass ${pass} complete${PL_C_RST}" >&2
 
   if [ "$drain" = "1" ]; then
-    remaining="$(_ready_count)"
+    remaining="$(_ready_count)" || pl_die "cycle: gh error checking remaining state:ready — aborting drain to avoid false-complete"
     if [ "$remaining" -eq 0 ]; then
       echo "${PL_C_OK}cycle: drain complete — no state:ready issues remain${PL_C_RST}" >&2
       break

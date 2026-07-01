@@ -111,6 +111,19 @@ SH
   echo "$output" | grep -qiE "positive integer|rounds"
 }
 
+@test "cycle: --drain aborts (non-zero) if gh fails in _ready_count (no false-complete)" {
+  # A failing gh must NOT produce a silent "drain complete" — it must abort visibly.
+  cat > "$PL_TEST_BIN/gh" <<'SH'
+#!/usr/bin/env bash
+exit 1
+SH
+  chmod +x "$PL_TEST_BIN/gh"
+  PL_REPO=test/repo PATH="$PL_TEST_BIN:$PATH" run scripts/cycle.sh --drain
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -qiE "gh error|false.complete|cannot determine"
+  # MUTATION PROOF: restore || echo 0 → exits 0 with "drain complete", this status check fails.
+}
+
 @test "cycle: --drain safety cap (PL_DRAIN_MAX_PASSES) fires after N passes" {
   # gh always returns work remaining → drain would loop forever without the cap.
   cat > "$PL_TEST_BIN/gh" <<'SH'
