@@ -58,7 +58,7 @@ review_one() {
   # turn; a reviewer who uses tools and emits the JSON in an earlier turn is silently lost.
   raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed --output-format stream-json 2>/dev/null || true)"
   # Concatenate the text from every assistant message turn (not just the final result event).
-  result="$(printf '%s' "$raw" | jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text' 2>/dev/null | paste -sd'\n' || true)"
+  result="$(printf '%s' "$raw" | jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text' 2>/dev/null || true)"
   [ -n "$result" ] || result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null || true)"
   rec="$(printf '%s' "$result" | pl_extract_json 2>/dev/null || true)"
   verdict="$(printf '%s' "$rec" | jq -r '.verdict // empty' 2>/dev/null || true)"

@@ -272,7 +272,7 @@ dispatch_one() {
   if raw="$(cd "$run_pwd" && "${timeout_args[@]+"${timeout_args[@]}"}" "$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed --output-format stream-json 2>/dev/null)"; then
     # Scan ALL assistant turns — stream-json gives every event; .result would only be the last turn
     # and any JSON emitted before a tool call would be silently lost (#274).
-    result="$(printf '%s' "$raw" | jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text' 2>/dev/null | paste -sd'\n' || true)"
+    result="$(printf '%s' "$raw" | jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text' 2>/dev/null || true)"
     [ -n "$result" ] || result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null || true)"
     [ -n "$result" ] || result="$raw"        # tolerate non-envelope output (stubs / --output-format text)
     record="$(printf '%s' "$result" | _extract_json || true)"
