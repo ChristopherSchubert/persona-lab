@@ -1096,3 +1096,17 @@ SH
   [ -n "$rec" ]
   # MUTATION PROOF: remove timeout_args conditional → dispatch hangs on sleep 60, test times out.
 }
+
+@test "dispatch: warns when PL_DISPATCH_TIMEOUT set but timeout binary is absent" {
+  # Remove timeout from PATH so command -v timeout fails.
+  # The dispatch should proceed (no hang) and emit a warning to stderr.
+  fake_issues '[
+    {"number":5,"title":"quick task","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  # Remove the fake timeout if one was written from a prior test run in this session.
+  rm -f "$PL_TEST_BIN/timeout"
+  PL_DISPATCH_TIMEOUT=300 run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qiE "PL_DISPATCH_TIMEOUT|timeout.*not found|coreutils"
+  # MUTATION PROOF: remove the else-branch warning → output has no warning message, grep fails.
+}

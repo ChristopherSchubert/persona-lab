@@ -262,8 +262,12 @@ dispatch_one() {
 
   echo "${PL_C_HEAD}dispatch: -> #${issue_number} '${persona}' (${name} · ${role}) [allowedTools: ${allowed}${model:+ model: $model}]${PL_C_RST}" >&2
   local raw result record rtype body pr verdict url="" timeout_args=()
-  if [ -n "${PL_DISPATCH_TIMEOUT:-}" ] && command -v timeout >/dev/null 2>&1; then
-    timeout_args=(timeout "$PL_DISPATCH_TIMEOUT")
+  if [ -n "${PL_DISPATCH_TIMEOUT:-}" ]; then
+    if command -v timeout >/dev/null 2>&1; then
+      timeout_args=(timeout "$PL_DISPATCH_TIMEOUT")
+    else
+      echo "${PL_C_WARN}dispatch: PL_DISPATCH_TIMEOUT set but 'timeout' not found in PATH — running without timeout (install GNU coreutils)${PL_C_RST}" >&2
+    fi
   fi
   if raw="$(cd "$run_pwd" && "${timeout_args[@]+"${timeout_args[@]}"}" "$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed --output-format json 2>/dev/null)"; then
     result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null)"

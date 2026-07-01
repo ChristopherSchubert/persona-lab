@@ -56,8 +56,8 @@ SH
 
 @test "cycle: --drain loops until no state:ready issues remain" {
   # Use a file counter — env vars don't survive across gh subprocess calls.
-  # _ready_count calls gh twice per pass (header + tail check); need 2 passes → 4 calls.
-  # Return 2 for calls 1-3, 0 for call 4 so pass 2 ends and drains.
+  # _ready_count is called twice per pass: pre-pass count (pre_count) + post-pass remaining check.
+  # 2 passes × 2 calls/pass = 4 calls. Return 2 for calls 1-3, 0 for call 4 so pass 2 drains.
   local ctr="$PL_TEST_BIN/.gh_calls"
   echo 0 > "$ctr"
   cat > "$PL_TEST_BIN/gh" <<SH
