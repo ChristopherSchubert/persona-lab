@@ -18,18 +18,21 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.s
 
 passthru=()
 rounds=1
+rounds_set=0
 drain=0
 while [ $# -gt 0 ]; do case "$1" in
   --dry-run)  passthru+=(--dry-run); shift;;
   --repo)     export PL_REPO="$2"; shift 2;;
-  --rounds)   [[ "$2" =~ ^[0-9]+$ ]] && [ "$2" -gt 0 ] || pl_die "cycle: --rounds requires a positive integer (got '$2')"; rounds="$2"; shift 2;;
+  --rounds)   [ $# -ge 2 ] || pl_die "cycle: --rounds requires a value"
+              [[ "${2}" =~ ^[0-9]+$ ]] && [ "${2}" -gt 0 ] || pl_die "cycle: --rounds requires a positive integer (got '${2}')"
+              rounds="${2}"; rounds_set=1; shift 2;;
   --drain)    drain=1; shift;;
   *)          pl_die "cycle: unknown arg $1";;
 esac; done
 
 # Mutual-exclusion checks post-parse (require full argument set to be collected first).
 [ "$drain" = "1" ] && [ "${#passthru[@]}" -gt 0 ] && pl_die "cycle: --drain is incompatible with --dry-run (dry-run never mutates labels, so _ready_count never reaches 0)"
-[ "$drain" = "1" ] && [ "$rounds" -ne 1 ] && pl_die "cycle: --drain and --rounds are mutually exclusive"
+[ "$drain" = "1" ] && [ "$rounds_set" = "1" ] && pl_die "cycle: --drain and --rounds are mutually exclusive"
 
 TRIAGE_SH="${PL_TRIAGE_SH:-$here/triage-reviews.sh}"
 DISPATCH_SH="${PL_DISPATCH_SH:-$here/dispatch.sh}"

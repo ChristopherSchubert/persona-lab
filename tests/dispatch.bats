@@ -1091,8 +1091,10 @@ SH
   grep -qF "claim" "$PL_LOCK_LOG"
   grep -qF "release" "$PL_LOCK_LOG"
   # a run record was written with outcome=failed
+  local ndjson="$PL_RUNS_DIR/$(date -u +%F).ndjson"
+  [ -f "$ndjson" ]   # file must exist (runlog.sh wrote it); || true would mask a runlog failure
   local rec
-  rec="$(jq -r 'select(.outcome=="failed")' "$PL_RUNS_DIR"/$(date -u +%F).ndjson 2>/dev/null | head -1)"
+  rec="$(jq -rc 'select(.outcome=="failed")' "$ndjson" | head -1)"
   [ -n "$rec" ]
   # MUTATION PROOF: remove timeout_args conditional → dispatch hangs on sleep 60, test times out.
 }

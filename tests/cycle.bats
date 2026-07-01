@@ -99,6 +99,27 @@ SH
   echo "$output" | grep -qiE "mutually exclusive|drain|rounds"
 }
 
+@test "cycle: --drain --rounds 1 is also rejected (explicit --rounds always conflicts with --drain)" {
+  run scripts/cycle.sh --drain --rounds 1
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -qiE "mutually exclusive|drain|rounds"
+  # MUTATION PROOF: guard using [ rounds -ne 1 ] → passes silently for --rounds 1, this fails.
+}
+
+@test "cycle: --rounds with no value exits non-zero with clear message" {
+  run scripts/cycle.sh --rounds
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -qiE "requires a value|positive integer|rounds"
+}
+
+@test "cycle: --rounds N --dry-run forwards --dry-run to all stages in every pass" {
+  run scripts/cycle.sh --rounds 3 --dry-run
+  [ "$status" -eq 0 ]
+  # 4 stages × 3 passes = 12 --dry-run occurrences in the order log
+  [ "$(grep -c -- '--dry-run' "$PL_ORDER_LOG")" -eq 12 ]
+  # MUTATION PROOF: --rounds 1 → only 4 occurrences, this fails.
+}
+
 @test "cycle: --rounds 0 is rejected (requires positive integer)" {
   run scripts/cycle.sh --rounds 0
   [ "$status" -ne 0 ]
