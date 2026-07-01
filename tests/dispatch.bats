@@ -1074,10 +1074,11 @@ exit $rc
 SH
   chmod +x "$PL_TEST_BIN/timeout"
   # Replace fake-claude with a sleeper that never exits on its own.
+  # exec so SIGTERM from fake-timeout hits sleep directly (no orphaned sleep child).
   cat > "$PL_TEST_BIN/fake-claude" <<'SH'
 #!/usr/bin/env bash
 echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
-sleep 60
+exec sleep 60
 SH
   chmod +x "$PL_TEST_BIN/fake-claude"
   fake_issues '[

@@ -68,8 +68,8 @@ SH
   chmod +x "$PL_TEST_BIN/gh"
   PL_REPO=test/repo PATH="$PL_TEST_BIN:$PATH" run scripts/cycle.sh --drain
   [ "$status" -eq 0 ]
-  # ran at least 2 passes (once with remaining work, once to drain)
-  [ "$(grep -c '^dispatch' "$PL_ORDER_LOG")" -ge 2 ]
+  # ran exactly 2 passes (stub is deterministic: 4 calls → 2 passes)
+  [ "$(grep -c '^dispatch' "$PL_ORDER_LOG")" -eq 2 ]
   echo "$output" | grep -q "drain complete"
   # MUTATION PROOF: remove _ready_count loop → only 1 dispatch, count assertion fails.
 }
@@ -84,6 +84,45 @@ SH
   [ "$status" -eq 0 ]
   [ "$(grep -c '^dispatch' "$PL_ORDER_LOG")" -eq 1 ]
   echo "$output" | grep -q "drain complete"
+}
+
+@test "cycle: --drain --dry-run exits non-zero (mutually incompatible)" {
+  run scripts/cycle.sh --drain --dry-run
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -qiE "drain|dry.run|incompatible"
+  # MUTATION PROOF: remove the guard → --drain runs indefinitely (never reaches 0 in dry-run).
+}
+
+@test "cycle: --drain and --rounds are mutually exclusive" {
+  run scripts/cycle.sh --drain --rounds 3
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -qiE "mutually exclusive|drain|rounds"
+}
+
+@test "cycle: --rounds 0 is rejected (requires positive integer)" {
+  run scripts/cycle.sh --rounds 0
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -qiE "positive integer|rounds"
+}
+
+@test "cycle: --rounds banana is rejected (non-integer)" {
+  run scripts/cycle.sh --rounds banana
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -qiE "positive integer|rounds"
+}
+
+@test "cycle: --drain safety cap (PL_DRAIN_MAX_PASSES) fires after N passes" {
+  # gh always returns work remaining → drain would loop forever without the cap.
+  cat > "$PL_TEST_BIN/gh" <<'SH'
+#!/usr/bin/env bash
+printf '5\n'
+SH
+  chmod +x "$PL_TEST_BIN/gh"
+  PL_REPO=test/repo PL_DRAIN_MAX_PASSES=2 PATH="$PL_TEST_BIN:$PATH" run scripts/cycle.sh --drain
+  [ "$status" -ne 0 ]
+  [ "$(grep -c '^dispatch' "$PL_ORDER_LOG")" -eq 2 ]
+  echo "$output" | grep -qiE "cap|max.passes|safety"
+  # MUTATION PROOF: remove the cap check → loop runs forever, test times out.
 }
 
 @test "cycle: --repo exports PL_REPO so every stage sees it" {

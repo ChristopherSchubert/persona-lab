@@ -22,10 +22,14 @@ drain=0
 while [ $# -gt 0 ]; do case "$1" in
   --dry-run)  passthru+=(--dry-run); shift;;
   --repo)     export PL_REPO="$2"; shift 2;;
-  --rounds)   rounds="$2"; shift 2;;
+  --rounds)   [[ "$2" =~ ^[0-9]+$ ]] && [ "$2" -gt 0 ] || pl_die "cycle: --rounds requires a positive integer (got '$2')"; rounds="$2"; shift 2;;
   --drain)    drain=1; shift;;
   *)          pl_die "cycle: unknown arg $1";;
 esac; done
+
+# Mutual-exclusion checks post-parse (require full argument set to be collected first).
+[ "$drain" = "1" ] && [ "${#passthru[@]}" -gt 0 ] && pl_die "cycle: --drain is incompatible with --dry-run (dry-run never mutates labels, so _ready_count never reaches 0)"
+[ "$drain" = "1" ] && [ "$rounds" -ne 1 ] && pl_die "cycle: --drain and --rounds are mutually exclusive"
 
 TRIAGE_SH="${PL_TRIAGE_SH:-$here/triage-reviews.sh}"
 DISPATCH_SH="${PL_DISPATCH_SH:-$here/dispatch.sh}"
@@ -65,6 +69,10 @@ while true; do
     if [ "$remaining" -eq 0 ]; then
       echo "${PL_C_OK}cycle: drain complete — no state:ready issues remain${PL_C_RST}" >&2
       break
+    fi
+    max_passes="${PL_DRAIN_MAX_PASSES:-20}"
+    if [ "$pass" -ge "$max_passes" ]; then
+      pl_die "cycle: --drain safety cap reached (${max_passes} passes, ${remaining} state:ready remain); set PL_DRAIN_MAX_PASSES to override"
     fi
   else
     [ "$pass" -lt "$rounds" ] || break
