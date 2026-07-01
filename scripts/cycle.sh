@@ -11,19 +11,20 @@
 # single pass always advances every other stage. Run it from a terminal or a scheduler (e.g. every few
 # hours). Each stage is a real reactor invoked via ${PL_*_SH:-$here/<stage>.sh}, overridable for tests.
 #
-# --drain (loop to quiescence — the once-a-day backlog cleaner, #187) is intentionally REFUSED until
-# #187 is built. Worktree isolation (#109) is now on main (the prior blocker). The remaining gate is
-# dispatch timeout (#173): without it a hung `claude -p` holds the writer lock indefinitely and
-# blocks every subsequent pass until a manual watchdog reclaim. Single-pass is safe today.
+# --rounds N  run exactly N passes (default 1)
+# --drain     loop to quiescence: keep passing until no state:ready issues remain (#187)
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$here/lib/common.sh"
 
 passthru=()
+rounds=1
+drain=0
 while [ $# -gt 0 ]; do case "$1" in
-  --dry-run) passthru+=(--dry-run); shift;;
-  --repo)    export PL_REPO="$2"; shift 2;;   # via env — every reactor honors PL_REPO (dispatch has no --repo flag)
-  --drain)   pl_die "cycle: --drain (#187) is not built yet — without dispatch timeout (#173) a hung claude -p holds the writer lock indefinitely and blocks every subsequent pass. Run cycle.sh (single pass) repeatedly for now.";;
-  *)         pl_die "cycle: unknown arg $1";;
+  --dry-run)  passthru+=(--dry-run); shift;;
+  --repo)     export PL_REPO="$2"; shift 2;;
+  --rounds)   rounds="$2"; shift 2;;
+  --drain)    drain=1; shift;;
+  *)          pl_die "cycle: unknown arg $1";;
 esac; done
 
 TRIAGE_SH="${PL_TRIAGE_SH:-$here/triage-reviews.sh}"
@@ -40,10 +41,33 @@ stage() {
   fi
 }
 
-echo "${PL_C_HEAD}cycle: one full SDLC pass (triage-reviews → dispatch → integrate → accept)${PL_C_RST}" >&2
-stage "triage-reviews" "$TRIAGE_SH"    ${passthru[@]+"${passthru[@]}"}
-stage "dispatch"       "$DISPATCH_SH"  ${passthru[@]+"${passthru[@]}"}
-stage "integrate"      "$INTEGRATE_SH" ${passthru[@]+"${passthru[@]}"}
-stage "accept"         "$ACCEPT_SH"    ${passthru[@]+"${passthru[@]}"}
-echo "${PL_C_OK}cycle: pass complete${PL_C_RST}" >&2
+_ready_count() {
+  gh issue list --repo "$(pl_gh_repo)" --label "state:ready" --json number --jq 'length' 2>/dev/null || echo 0
+}
+
+pass=0
+while true; do
+  pass=$((pass + 1))
+  if [ "$drain" = "1" ]; then
+    echo "${PL_C_HEAD}cycle: pass ${pass} (draining — $(  _ready_count) state:ready)${PL_C_RST}" >&2
+  else
+    echo "${PL_C_HEAD}cycle: pass ${pass} of ${rounds}${PL_C_RST}" >&2
+  fi
+
+  stage "triage-reviews" "$TRIAGE_SH"    ${passthru[@]+"${passthru[@]}"}
+  stage "dispatch"       "$DISPATCH_SH"  ${passthru[@]+"${passthru[@]}"}
+  stage "integrate"      "$INTEGRATE_SH" ${passthru[@]+"${passthru[@]}"}
+  stage "accept"         "$ACCEPT_SH"    ${passthru[@]+"${passthru[@]}"}
+  echo "${PL_C_OK}cycle: pass ${pass} complete${PL_C_RST}" >&2
+
+  if [ "$drain" = "1" ]; then
+    remaining="$(_ready_count)"
+    if [ "$remaining" -eq 0 ]; then
+      echo "${PL_C_OK}cycle: drain complete — no state:ready issues remain${PL_C_RST}" >&2
+      break
+    fi
+  else
+    [ "$pass" -lt "$rounds" ] || break
+  fi
+done
 exit 0

@@ -1058,3 +1058,40 @@ SH
   case "$cwd" in */.claude/persona-lab/wt/developer-11) ;; *) false;; esac
   # MUTATION PROOF: run claude in the shared tree (ignore the workdir) → cwd is the repo root, this fails.
 }
+
+@test "dispatch: PL_DISPATCH_TIMEOUT kills a hung claude and records outcome=failed" {
+  # Provide a fake `timeout` in PL_TEST_BIN (macOS lacks the GNU coreutils version).
+  cat > "$PL_TEST_BIN/timeout" <<'SH'
+#!/usr/bin/env bash
+dur=$1; shift
+"$@" &
+child=$!
+( sleep "$dur"; kill "$child" 2>/dev/null ) &
+killer=$!
+wait "$child" 2>/dev/null; rc=$?
+kill "$killer" 2>/dev/null; wait "$killer" 2>/dev/null
+exit $rc
+SH
+  chmod +x "$PL_TEST_BIN/timeout"
+  # Replace fake-claude with a sleeper that never exits on its own.
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+sleep 60
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":5,"title":"slow task","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  # timeout after 1s — dispatch should NOT hang and should record a failed outcome
+  PL_DISPATCH_TIMEOUT=1 run scripts/dispatch.sh
+  [ "$status" -eq 0 ]  # dispatch itself exits cleanly even though claude was killed
+  # lock was claimed and then released (cleanup ran)
+  grep -qF "claim" "$PL_LOCK_LOG"
+  grep -qF "release" "$PL_LOCK_LOG"
+  # a run record was written with outcome=failed
+  local rec
+  rec="$(jq -r 'select(.outcome=="failed")' "$PL_RUNS_DIR"/$(date -u +%F).ndjson 2>/dev/null | head -1)"
+  [ -n "$rec" ]
+  # MUTATION PROOF: remove timeout_args conditional → dispatch hangs on sleep 60, test times out.
+}

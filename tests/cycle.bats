@@ -45,10 +45,45 @@ SH
   grep -q '^accept' "$PL_ORDER_LOG"
 }
 
-@test "cycle: --drain is refused until worktree isolation (#109) lands" {
-  run scripts/cycle.sh --drain
-  [ "$status" -ne 0 ]
-  echo "$output" | grep -qiE "drain|#109|isolation"
+@test "cycle: --rounds N runs exactly N passes" {
+  run scripts/cycle.sh --rounds 3
+  [ "$status" -eq 0 ]
+  # each stage appears exactly 3 times
+  [ "$(grep -c '^dispatch' "$PL_ORDER_LOG")" -eq 3 ]
+  [ "$(grep -c '^integrate' "$PL_ORDER_LOG")" -eq 3 ]
+  # MUTATION PROOF: change --rounds 3 to --rounds 1 → grep -c returns 1, this fails.
+}
+
+@test "cycle: --drain loops until no state:ready issues remain" {
+  # Use a file counter — env vars don't survive across gh subprocess calls.
+  # _ready_count calls gh twice per pass (header + tail check); need 2 passes → 4 calls.
+  # Return 2 for calls 1-3, 0 for call 4 so pass 2 ends and drains.
+  local ctr="$PL_TEST_BIN/.gh_calls"
+  echo 0 > "$ctr"
+  cat > "$PL_TEST_BIN/gh" <<SH
+#!/usr/bin/env bash
+n=\$(cat "$ctr"); n=\$((n+1)); echo \$n > "$ctr"
+if [ "\$n" -le 3 ]; then printf '2\n'; else printf '0\n'; fi
+SH
+  chmod +x "$PL_TEST_BIN/gh"
+  PL_REPO=test/repo PATH="$PL_TEST_BIN:$PATH" run scripts/cycle.sh --drain
+  [ "$status" -eq 0 ]
+  # ran at least 2 passes (once with remaining work, once to drain)
+  [ "$(grep -c '^dispatch' "$PL_ORDER_LOG")" -ge 2 ]
+  echo "$output" | grep -q "drain complete"
+  # MUTATION PROOF: remove _ready_count loop → only 1 dispatch, count assertion fails.
+}
+
+@test "cycle: --drain with zero ready issues runs exactly one pass then stops" {
+  cat > "$PL_TEST_BIN/gh" <<'SH'
+#!/usr/bin/env bash
+printf '0\n'
+SH
+  chmod +x "$PL_TEST_BIN/gh"
+  PL_REPO=test/repo PATH="$PL_TEST_BIN:$PATH" run scripts/cycle.sh --drain
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^dispatch' "$PL_ORDER_LOG")" -eq 1 ]
+  echo "$output" | grep -q "drain complete"
 }
 
 @test "cycle: --repo exports PL_REPO so every stage sees it" {
