@@ -49,8 +49,10 @@ SH
   run scripts/cycle.sh --rounds 3
   [ "$status" -eq 0 ]
   # each stage appears exactly 3 times
-  [ "$(grep -c '^dispatch' "$PL_ORDER_LOG")" -eq 3 ]
+  [ "$(grep -c '^triage'    "$PL_ORDER_LOG")" -eq 3 ]
+  [ "$(grep -c '^dispatch'  "$PL_ORDER_LOG")" -eq 3 ]
   [ "$(grep -c '^integrate' "$PL_ORDER_LOG")" -eq 3 ]
+  [ "$(grep -c '^accept'    "$PL_ORDER_LOG")" -eq 3 ]
   # MUTATION PROOF: change --rounds 3 to --rounds 1 → grep -c returns 1, this fails.
 }
 

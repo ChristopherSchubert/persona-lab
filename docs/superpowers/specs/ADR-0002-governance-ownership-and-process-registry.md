@@ -4,6 +4,8 @@
 **Date:** 2026-06-27  
 **Owners:** Tom (Platform Architect) · Raj (Data Architect)
 
+**Revision (2026-06-30, #130):** Added Part 3 — Issue-Creation and Routing Convention (one enveloped front door, one triage inbox, audit-sweep entry protocol, provenance model — deferred `opened-by:` to data-architect). Added PR-005 to process registry. Deciding record: issue #93 (Sarah — PM DECISION).
+
 ---
 
 ## Context
@@ -135,6 +137,7 @@ and both ADRs cross-reference.
 | PR-002 | Sweep-liveness watchdog | Platform Architect | `schedule: every sweep_cadence` | Every sweep run | `HANDOFF` (heartbeat variant, `heartbeat: true`) | `∃ HANDOFF(heartbeat=true, timestamp ≥ now − 2×sweep_cadence)` — if no heartbeat record exists within two cadences, the dead-man check fires: an external monitor (cron or GitHub Actions scheduled job) files a `ASSESSMENT` record with `blocker_type: infrastructure`, owner: Platform Architect, and the PM escalates to `needs_human`; the sweep is down until confirmed restored |
 | PR-003 | Registry maintenance | PM | `event: map_amendment \| schedule: quarterly` | Within 5 days of any ownership-map amendment; or quarterly review | `DECISION` (registry-review variant) | `∃ DECISION(registry_review=true, timestamp ≤ last_amendment+5d OR timestamp ≤ last_quarterly_review+90d)` — if the registry has not been reviewed within 90 days and no amendment has triggered an earlier review, sweep escalates to `needs_human` (subtype: action, deadline: now + 7 days) |
 | PR-004 | Gap-issue triage | PM | `condition: governance-gap issue filed` | Within one sweep cadence of filing | `DECISION` (gap-triage variant) | `∀ open issue(label=governance-gap) → ∃ DECISION(gap_triage=true, timestamp ≤ filed_at + sweep_cadence)` — untriaged gap issues past one cadence are escalated by the sweep to `needs_human` (subtype: decision, deadline: now + 1 day) |
+| PR-005 | Issue-creation gate | Platform Architect | `event: tracked-work issue filed` | Per issue-creation event | `ASSESSMENT` (protocol-violation variant, when violated) | `∀ open tracked-work issue → body contains queue.sh envelope` — bare issues (no envelope) are flagged by sweep and escalated to `needs_human` (subtype: action, deadline: now + P1D) with an `ASSESSMENT` citing §3.2 C-1 |
 
 #### 2.4 Process registry invariants
 
@@ -165,13 +168,44 @@ and both ADRs cross-reference.
 
 ---
 
+### Part 3 — Issue-Creation and Routing Convention
+
+#### 3.1 Context
+
+Issue #93 carries a PM DECISION by Sarah establishing that all tracked work must enter the bus through a single, attributable gate. This Part records that decision as a checkable convention, leaning on the ADR-0001 state machine. Ownership class: infrastructure/runtime (class 5); Platform Architect owns it.
+
+#### 3.2 Conventions
+
+**C-1 — One enveloped front door.**
+All tracked-work issues are created via `scripts/queue.sh file`. A bare `gh issue create` — or any GitHub-native path that bypasses `queue.sh` — is a protocol violation for tracked work. Non-persona origin (human action, external trigger) sets the `persona` field to `human` in the envelope. No exception.
+
+**C-2 — One triage inbox.**
+Every new tracked-work issue enters with label `state:proposed`. The PM's `TRIAGE` transition (ADR-0001) assigns `persona:<slug>` + `priority:pN` + `state:ready`. An issue may not jump from creation directly to `ready` — the triage step is mandatory and produces the assignment `DECISION` record.
+
+**C-3 — Audit-sweep findings enter as `state:proposed`.**
+Findings emitted by the audit sweep are filed via `queue.sh file` and land in `state:proposed`. They are not pre-assigned. The PM's triage step routes them identically to any other new item.
+
+**C-4 — Provenance: envelope + run-log suffice.**
+The queue.sh envelope (avatar + name + badge, single-row float per the envelope spec) and the corresponding run-log entry are sufficient provenance for tracked work. An `opened-by:` field in the issue body is **deferred**: when the data-architect specifies a schema for it, this convention will be updated via the amendment procedure (§1.3).
+
+#### 3.3 Invariants
+
+**I-C1.** Every open tracked-work issue whose body does not contain a `queue.sh` envelope is a protocol violation. The sweep flags it and escalates to `needs_human` (subtype: action, deadline: now + P1D) with an `ASSESSMENT` record citing this convention (§3.2, C-1).
+
+**I-C2.** Every new tracked-work issue must enter `state:proposed`. An issue in `state:ready` or any later state without a prior `DECISION` (triage) record on the bus is a protocol violation; the sweep flags it.
+
+**I-C3.** Audit-sweep findings filed without an envelope are quarantine items (ADR-0001, `quarantine` state) until the envelope requirement is satisfied.
+
+---
+
 ## Machine-readable spec
 
 ```json
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "adr": "ADR-0002",
   "references": ["ADR-0001"],
+  "revision": "2026-06-30 — Part 3 (issue-creation convention) + PR-005; deciding record: issue #93",
   "decision_ownership_map": {
     "version": "1.0.0",
     "amendment_authority": "human (Founder)",
@@ -292,6 +326,20 @@ and both ADRs cross-reference.
         "required_record_variant": {"gap_triage": true},
         "invariant": "forall open_issue where label=governance-gap: exists DECISION where gap_triage=true and timestamp <= issue.filed_at + sweep_cadence",
         "on_fail": "sweep escalates to needs_human(subtype=decision, deadline=now+P1D)"
+      },
+      {
+        "process_id": "PR-005",
+        "name": "Issue-creation gate",
+        "owner_role": "Platform Architect",
+        "trigger": {"type": "event", "event": "tracked-work issue filed"},
+        "cadence_when": "per issue-creation event",
+        "required_record": "ASSESSMENT",
+        "required_record_variant": {"protocol_violation": true},
+        "note": "ASSESSMENT only required on violation; a conforming issue (envelope present) produces no required record beyond the envelope itself",
+        "invariant": "forall open tracked-work issue: body contains queue.sh envelope",
+        "on_fail": "sweep files ASSESSMENT(protocol_violation=true, cites=ADR-0002-3.2-C1) and escalates to needs_human(subtype=action, deadline=now+P1D)",
+        "deciding_record": "issue #93 (Sarah — PM DECISION)",
+        "convention_ref": "ADR-0002 §3.2"
       }
     ]
   }
@@ -359,6 +407,16 @@ both ADRs cross-reference. The full effective taxonomy is ADR-0001's table plus 
     reviewed on cadence. The PM may not defer registry maintenance indefinitely; the sweep
     escalates overdue reviews.
 
+### Issue-creation convention invariants (Part 3)
+
+11. **All tracked-work issues must enter via `queue.sh file`.** A bare GitHub issue without a bus envelope is a protocol violation; the sweep flags it within one sweep cadence and escalates to `needs_human` (subtype: action). This invariant is machine-checkable: envelope presence is a deterministic body-pattern check.
+
+12. **New tracked-work issues enter `state:proposed`.** An issue that reaches `state:ready` without a prior `DECISION` (triage) record has bypassed the mandatory PM triage step; the sweep flags it.
+
+13. **Audit-sweep findings are not pre-assigned.** Findings filed by the sweep enter `state:proposed` like any other new item; the PM assigns them via the standard `TRIAGE` transition.
+
+14. **`opened-by:` is deferred, not assumed.** Until the data-architect specifies a schema, no `opened-by:` field is written to issue bodies. Provenance is established solely by the envelope + run-log pair.
+
 ---
 
 ## Consequences
@@ -382,6 +440,9 @@ both ADRs cross-reference. The full effective taxonomy is ADR-0001's table plus 
 - **Calibration is a first-class process.** PR-001 ensures every role is explicitly calibrated at
   project start, not assumed to be from persona briefings. `FEEDBACK` records are
   timestamped and queryable.
+- **Issue creation is auditable.** PR-005 closes the bare-`gh issue create` gap. Every tracked-work
+  issue now carries an envelope that names its author, type, and origin — queryable without model
+  inference.
 
 ### Trade-offs
 

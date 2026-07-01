@@ -1110,5 +1110,7 @@ SH
   PL_DISPATCH_TIMEOUT=300 run scripts/dispatch.sh
   [ "$status" -eq 0 ]
   echo "$output" | grep -qiE "PL_DISPATCH_TIMEOUT|timeout.*not found|coreutils"
+  # dispatch still invoked claude even without timeout binary — issue was not skipped
+  grep -qF "CLAUDE" "$PL_CLAUDE_LOG"
   # MUTATION PROOF: remove the else-branch warning → output has no warning message, grep fails.
 }
