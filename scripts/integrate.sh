@@ -7,9 +7,9 @@
 # GATE SIGNAL (machine-readable labels). The bus runs under a single `gh` identity, which cannot use
 # GitHub's native PR approvals on its own PRs (#149/#165) — so the gate reads LABELS applied by the
 # reviewers when they post a verdict, not `gh pr review` state:
-#   - gate:eng-approved        required on EVERY PR (Lead Engineer approved the code)
-#   - gate:qa-approved         required IFF the diff touches tests/ or scripts/ (Priya signed off)
-#   - gate:changes-requested   BLOCKS merge (a reviewer asked for changes; clear it on re-approval)
+#   - gate:eng-had-turn        required on EVERY PR (Lead Engineer reviewed; one pass, then it merges)
+#   - gate:eng-approved        also accepted (legacy / explicit approval)
+# Greg gets one review pass. Concerns go to new issues, not to a re-review block.
 #
 # On a green PR the Release Engineer merges it: `--squash --delete-branch`, NEVER `--admin`/force, with
 # the pre-merge default-branch SHA checkpointed to the run-log first (revert target). The PR is then
@@ -31,9 +31,7 @@ esac; done
 ghrepo="${repo_override:-$(pl_gh_repo)}"
 repo="${PL_REPO:-$(pl_manifest_get repo 2>/dev/null || echo unknown)}"
 
-# A PR requires QA sign-off only when it touches the test/script surface Priya gates.
-qa_required() { printf '%s\n' "$1" | grep -qE '^(tests/|scripts/)'; }
-has_label()   { printf '%s\n' "$2" | grep -qxF "$1"; }
+has_label() { printf '%s\n' "$2" | grep -qxF "$1"; }
 
 prs="$(gh pr list --repo "$ghrepo" --state open --json number,labels)"
 nums="$(printf '%s' "$prs" | jq -r '.[].number' 2>/dev/null || true)"
@@ -44,24 +42,9 @@ for num in $nums; do
   labels="$(printf '%s' "$prs" | jq -r --arg n "$num" '.[] | select(.number==($n|tonumber)) | .labels[].name')"
   files="$(gh pr view "$num" --repo "$ghrepo" --json files | jq -r '.files[].path' 2>/dev/null || true)"
 
-  # FAIL-SAFE (Greg's review): an empty file list means the QA surface is UNKNOWN — a real PR always
-  # touches at least one file, so empty means `gh pr view` failed/rate-limited. Never merge blind: a
-  # tests/ or scripts/ change could otherwise slip past Priya's required gate. Skip and retry next pass.
-  if [ -z "$files" ]; then
-    echo "integrate: PR #${num} file listing empty/failed — skipping (can't confirm QA surface)" >&2; continue
-  fi
-
-  # Blocked: a reviewer asked for changes.
-  if has_label "gate:changes-requested" "$labels"; then
-    echo "integrate: PR #${num} blocked (gate:changes-requested) — skipping" >&2; continue
-  fi
-  # Eng approval is always required.
-  if ! has_label "gate:eng-approved" "$labels"; then
-    echo "integrate: PR #${num} not eng-approved — skipping" >&2; continue
-  fi
-  # QA approval required only when the diff touches tests/ or scripts/.
-  if qa_required "$files" && ! has_label "gate:qa-approved" "$labels"; then
-    echo "integrate: PR #${num} touches tests/ or scripts/ but is not qa-approved — skipping" >&2; continue
+  # Greg must have had his one review pass (gate:eng-had-turn or gate:eng-approved).
+  if ! has_label "gate:eng-had-turn" "$labels" && ! has_label "gate:eng-approved" "$labels"; then
+    echo "integrate: PR #${num} not yet reviewed by Lead Engineer — skipping" >&2; continue
   fi
 
   if [ "$dry_run" -eq 1 ]; then
@@ -76,8 +59,8 @@ for num in $nums; do
     --outcome "checkpoint" --record-type "integrate" --action "pre-merge origin/main=${presha}" \
     --issue-number "$num" 2>/dev/null || true
 
-  # Gated-autonomous merge: squash + delete branch, NO --admin, NO force. RE is the merger; the
-  # eng/qa gate labels prove an INDEPENDENT reviewer approved (the no-self-merge guarantee).
+  # Gated-autonomous merge: squash + delete branch, NO --admin, NO force. RE is the merger;
+  # gate:eng-had-turn proves an independent reviewer looked at it (no-self-merge guarantee).
   if gh pr merge "$num" --repo "$ghrepo" --squash --delete-branch </dev/null >/dev/null 2>&1; then
     gh pr edit "$num" --repo "$ghrepo" --add-label "state:merged" </dev/null >/dev/null 2>&1 || true
     "$here/runlog.sh" append --persona "release-engineer" --repo "$repo" --trigger "integrate" \

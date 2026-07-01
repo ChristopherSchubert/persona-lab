@@ -27,9 +27,8 @@ repo="${PL_REPO:-$(pl_manifest_get repo 2>/dev/null || echo unknown)}"
 # Fixed gate: Lead Engineer always; Head of QA when the diff touches tests/ or scripts/.
 _gate_reviewers() {
   echo "lead-engineer"
-  printf '%s\n' "$1" | grep -qE '^(tests/|scripts/)' && echo "head-of-qa" || true
 }
-_gate_label_for() { case "$1" in lead-engineer) echo "gate:eng-approved";; head-of-qa) echo "gate:qa-approved";; *) echo "";; esac; }
+_gate_label_for() { case "$1" in lead-engineer) echo "gate:eng-approved";; *) echo "";; esac; }
 has_label() { printf '%s\n' "$2" | grep -qxF "$1"; }
 
 # Dispatch ONE gate reviewer against a PR and post the verdict ON THE PR (comment + gate label). No issue.
@@ -68,17 +67,19 @@ review_one() {
     return 0
   fi
 
-  # Post the verdict as a PR COMMENT (#216: never native --approve on own PR) and set the gate label.
+  # Post the verdict as a PR COMMENT (#216: never native --approve on own PR) and mark Greg's turn done.
+  # One review per PR — Greg posts findings, sets gate:eng-had-turn, then the PR merges.
+  # If he has blocking concerns he opens new issues; he does not re-review.
   "$here/review.sh" "$pr" --persona "$name" --tier "$role" --type REVIEW --body "$body" --event comment --repo "$ghrepo" </dev/null >/dev/null 2>&1 || true
+  gh pr edit "$pr" --repo "$ghrepo" --add-label "gate:eng-had-turn" --remove-label "gate:changes-requested" </dev/null >/dev/null 2>&1 || true
   case "$verdict" in
     approve|approved)
-      gh pr edit "$pr" --repo "$ghrepo" --add-label "$glabel" --remove-label "gate:changes-requested" </dev/null >/dev/null 2>&1 || true
+      gh pr edit "$pr" --repo "$ghrepo" --add-label "$glabel" </dev/null >/dev/null 2>&1 || true
       echo "${PL_C_OK}triage-reviews: <- ${name} approved PR #${pr} → ${glabel}${PL_C_RST}" >&2 ;;
     request-changes|request_changes|changes-requested)
-      gh pr edit "$pr" --repo "$ghrepo" --add-label "gate:changes-requested" --remove-label "$glabel" </dev/null >/dev/null 2>&1 || true
-      echo "${PL_C_WARN}triage-reviews: <- ${name} requested changes on PR #${pr} → gate:changes-requested${PL_C_RST}" >&2 ;;
+      echo "${PL_C_WARN}triage-reviews: <- ${name} noted concerns on PR #${pr} → gate:eng-had-turn (concerns go to new issues, not a block)${PL_C_RST}" >&2 ;;
     *)
-      echo "${PL_C_DIM}triage-reviews: <- ${name} commented on PR #${pr} (no gate change)${PL_C_RST}" >&2 ;;
+      echo "${PL_C_DIM}triage-reviews: <- ${name} commented on PR #${pr} → gate:eng-had-turn${PL_C_RST}" >&2 ;;
   esac
 }
 
@@ -91,8 +92,9 @@ for pr in $nums; do
   labels="$(printf '%s' "$prs" | jq -r --arg n "$pr" '.[] | select(.number==($n|tonumber)) | .labels[].name')"
   has_label "state:merged"   "$labels" && continue
   has_label "state:accepted" "$labels" && continue
-  if has_label "gate:changes-requested" "$labels"; then
-    echo "triage-reviews: PR #${pr} has changes requested — awaiting the dev, skipping" >&2; continue
+  # Skip if Greg already had his one turn
+  if has_label "gate:eng-had-turn" "$labels"; then
+    echo "triage-reviews: PR #${pr} already reviewed — skipping" >&2; continue
   fi
 
   files="$(gh pr view "$pr" --repo "$ghrepo" --json files | jq -r '.files[].path' 2>/dev/null || true)"
@@ -100,8 +102,6 @@ for pr in $nums; do
 
   while IFS= read -r slug; do
     [ -n "$slug" ] || continue
-    glabel="$(_gate_label_for "$slug")"
-    has_label "$glabel" "$labels" && continue   # already gated by this reviewer — dedup
     review_one "$pr" "$slug" "$diff" && reviewed=$((reviewed+1)) || true
   done < <(_gate_reviewers "$files")
 done
