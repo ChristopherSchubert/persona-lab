@@ -115,9 +115,13 @@ sweep_one() {
   name="$("$here/assign-names.sh" "$persona" 2>/dev/null || echo "$persona")"
   role="$(awk -F' — ' '/^# /{t=$1; sub(/^# +/,"",t); print t; exit}' "$agent")"
 
-  # Show the persona what is ALREADY open so it doesn't re-file (it can't read the bus itself; #125/#126).
+  # Build a specific, grounded prompt: recent changes + known failures + role focus.
+  local recent_commits role_focus
+  recent_commits="$(git log --oneline -15 2>/dev/null || echo '(unavailable)')"
+  role_focus="$(awk '/^## Owns/{found=1; next} found && /^## /{exit} found{print}' "$agent" | head -20)"
+
   local prompt
-  prompt="$(printf 'You are sweeping repo %s for work in YOUR domain that is NOT yet tracked as an open issue.\n\nThese issues are ALREADY OPEN — do NOT re-file anything already covered by one of them (match on meaning, not exact wording):\n%s\n\nAudit the committed state (code, docs, tests, config) with your granted tools. You CANNOT file issues — return findings and the harness files the new ones. Emit your findings as the FINAL ```json fenced code block in your message, with NOTHING after the closing fence (if your prose quotes any other JSON, the harness still takes only this last fenced block). The block must contain a JSON array (empty [] if nothing), each item exactly:\n```json\n[{"title":"<concise issue title>","body":"<the finding as GitHub-flavored markdown: what, where as path:line, why it matters>","record_type":"<ASSESSMENT|BLOCKER>","priority":"<p0|p1|p2|p3>"}]\n```\n' "$repo" "${existing_titles:-(none)}")"
+  prompt="$(printf 'You are doing a targeted audit of repo %s. Your role focus:\n%s\n\nRecent changes (last 15 commits):\n%s\n\nOpen issues (do NOT re-file these):\n%s\n\nYour job: read the actual files relevant to your domain. Find concrete, specific, actionable problems — broken behaviour, missing coverage, gaps between what the code does and what it should do. Do NOT file vague observations. Each finding must cite the exact file:line or script output that proves the problem.\n\nYou CANNOT file issues directly — return findings and the harness files them. Emit findings as the FINAL ```json fenced block, nothing after it:\n```json\n[{"title":"<specific issue title>","body":"<what is broken, exact path:line evidence, why it matters, suggested fix>","record_type":"<ASSESSMENT|BLOCKER>","priority":"<p0|p1|p2|p3>"}]\n```\nReturn [] if you find nothing real.\n' "$repo" "$role_focus" "$recent_commits" "${existing_titles:-(none)}")"
 
   echo "${C_HEAD}audit-sweep: -> '${persona}' (${name} · ${role}) sweeping ${repo}...${C_RST}" >&2
   local result arr n filed=0 dup=0 i title body rtype prio url num
