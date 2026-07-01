@@ -261,9 +261,19 @@ dispatch_one() {
   prompt="$(printf '%s\n\n---\n\nYou are operating the issue above (#%s) on repo %s. Do ONE bounded unit of work for your role (ADR-0001), using only the tools you have been granted. Act on the issue body/discussion above. You do NOT post to the bus — the harness posts your record for you. End your turn by emitting your record as the FINAL ```json fenced code block in your message, with NOTHING after the closing fence. The block must contain exactly one JSON object (if your prose quotes any other JSON, the harness still takes only this last fenced block):\n```json\n{"record_type":"<ASSESSMENT|DELIVERED|BLOCKER|REVIEW|PUSHBACK|FEEDBACK|ASK|REPLY>","body":"<your record as GitHub-flavored markdown; if you changed code or opened a PR, cite it>"}\n```\nIf and only if you are REVIEWING a pull request, the JSON object in that final fenced block must instead be:\n{"record_type":"REVIEW","pr":<the PR number>,"verdict":"<approve|request-changes|comment>","body":"<your review as markdown, citing the commit>"}\nThe harness posts this as a real PR review (gh pr review) so the merge gate can see your verdict.\nIf your work opens a pull request, include the trailer line `Resolves-Issue: #%s` in the PR body (this issue) so the PM acceptance step can close this issue once the PR is merged — do NOT use a GitHub auto-close keyword (Closes/Fixes), which would bypass PM acceptance.\n' "$issue_ctx" "$issue_number" "$repo" "$issue_number")"
 
   echo "${PL_C_HEAD}dispatch: -> #${issue_number} '${persona}' (${name} · ${role}) [allowedTools: ${allowed}${model:+ model: $model}]${PL_C_RST}" >&2
-  local raw result record rtype body pr verdict url=""
-  if raw="$(cd "$run_pwd" && "$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed --output-format json 2>/dev/null)"; then
-    result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null)"
+  local raw result record rtype body pr verdict url="" timeout_args=()
+  if [ -n "${PL_DISPATCH_TIMEOUT:-}" ]; then
+    if command -v timeout >/dev/null 2>&1; then
+      timeout_args=(timeout "$PL_DISPATCH_TIMEOUT")
+    else
+      echo "${PL_C_WARN}dispatch: PL_DISPATCH_TIMEOUT set but 'timeout' not found in PATH — running without timeout (install GNU coreutils)${PL_C_RST}" >&2
+    fi
+  fi
+  if raw="$(cd "$run_pwd" && "${timeout_args[@]+"${timeout_args[@]}"}" "$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed --output-format stream-json --verbose 2>/dev/null)"; then
+    # Scan ALL assistant turns — stream-json gives every event; .result would only be the last turn
+    # and any JSON emitted before a tool call would be silently lost (#274).
+    result="$(printf '%s' "$raw" | jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text' 2>/dev/null || true)"
+    [ -n "$result" ] || result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null || true)"
     [ -n "$result" ] || result="$raw"        # tolerate non-envelope output (stubs / --output-format text)
     record="$(printf '%s' "$result" | _extract_json || true)"
     rtype="$(printf '%s' "$record" | jq -r '.record_type // empty' 2>/dev/null)"

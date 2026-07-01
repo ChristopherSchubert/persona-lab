@@ -1058,3 +1058,57 @@ SH
   case "$cwd" in */.claude/persona-lab/wt/developer-11) ;; *) false;; esac
   # MUTATION PROOF: run claude in the shared tree (ignore the workdir) → cwd is the repo root, this fails.
 }
+
+@test "dispatch: PL_DISPATCH_TIMEOUT kills a hung claude and records outcome=failed" {
+  # Provide a fake `timeout` in PL_TEST_BIN (macOS lacks the GNU coreutils version).
+  cat > "$PL_TEST_BIN/timeout" <<'SH'
+#!/usr/bin/env bash
+dur=$1; shift
+"$@" &
+child=$!
+( sleep "$dur"; kill "$child" 2>/dev/null ) &
+killer=$!
+wait "$child" 2>/dev/null; rc=$?
+kill "$killer" 2>/dev/null; wait "$killer" 2>/dev/null
+exit $rc
+SH
+  chmod +x "$PL_TEST_BIN/timeout"
+  # Replace fake-claude with a sleeper that never exits on its own.
+  # exec so SIGTERM from fake-timeout hits sleep directly (no orphaned sleep child).
+  cat > "$PL_TEST_BIN/fake-claude" <<'SH'
+#!/usr/bin/env bash
+echo "CLAUDE $*" >> "$PL_CLAUDE_LOG"
+exec sleep 60
+SH
+  chmod +x "$PL_TEST_BIN/fake-claude"
+  fake_issues '[
+    {"number":5,"title":"slow task","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  # timeout after 1s — dispatch should NOT hang and should record a failed outcome
+  PL_DISPATCH_TIMEOUT=1 run scripts/dispatch.sh
+  [ "$status" -eq 0 ]  # dispatch itself exits cleanly even though claude was killed
+  # lock was claimed and then released (cleanup ran)
+  grep -qF "claim" "$PL_LOCK_LOG"
+  grep -qF "release" "$PL_LOCK_LOG"
+  # a run record was written with outcome=failed
+  local ndjson="$PL_RUNS_DIR/$(date -u +%F).ndjson"
+  [ -f "$ndjson" ]   # file must exist (runlog.sh wrote it); || true would mask a runlog failure
+  local rec
+  rec="$(jq -rc 'select(.outcome=="failed")' "$ndjson" | head -1)"
+  [ -n "$rec" ]
+  # MUTATION PROOF: remove timeout_args conditional → dispatch hangs on sleep 60, test times out.
+}
+
+@test "dispatch: warns when PL_DISPATCH_TIMEOUT set but timeout binary is absent" {
+  # Remove timeout from PATH so command -v timeout fails.
+  # The dispatch should proceed (no hang) and emit a warning to stderr.
+  fake_issues '[
+    {"number":5,"title":"quick task","labels":[{"name":"state:ready"},{"name":"dev:ready"},{"name":"persona:developer"}]}
+  ]'
+  # Remove the fake timeout if one was written from a prior test run in this session.
+  rm -f "$PL_TEST_BIN/timeout"
+  PL_DISPATCH_TIMEOUT=300 run scripts/dispatch.sh
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qiE "PL_DISPATCH_TIMEOUT|timeout.*not found|coreutils"
+  # MUTATION PROOF: remove the else-branch warning → output has no warning message, grep fails.
+}

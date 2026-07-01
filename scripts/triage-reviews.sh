@@ -54,8 +54,12 @@ review_one() {
   fi
 
   local raw result rec verdict body
-  raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed --output-format json 2>/dev/null || true)"
-  result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null || true)"; [ -n "$result" ] || result="$raw"
+  # stream-json so ALL assistant turns are available — --output-format json only gives the LAST
+  # turn; a reviewer who uses tools and emits the JSON in an earlier turn is silently lost.
+  raw="$("$CLAUDE_BIN" -p "$prompt" --append-system-prompt-file "$agent" $model_args --allowedTools $allowed --output-format stream-json --verbose 2>/dev/null || true)"
+  # Concatenate the text from every assistant message turn (not just the final result event).
+  result="$(printf '%s' "$raw" | jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text' 2>/dev/null || true)"
+  [ -n "$result" ] || result="$(printf '%s' "$raw" | jq -r '.result // empty' 2>/dev/null || true)"
   rec="$(printf '%s' "$result" | pl_extract_json 2>/dev/null || true)"
   verdict="$(printf '%s' "$rec" | jq -r '.verdict // empty' 2>/dev/null || true)"
   body="$(printf '%s'    "$rec" | jq -r '.body // empty'    2>/dev/null || true)"
